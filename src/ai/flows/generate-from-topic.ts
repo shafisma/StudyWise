@@ -16,9 +16,17 @@ const GenerateFromTopicInputSchema = z.object({
 });
 export type GenerateFromTopicInput = z.infer<typeof GenerateFromTopicInputSchema>;
 
+const QuizQuestionSchema = z.object({
+    question: z.string().describe('The question.'),
+    options: z.array(z.string()).describe('An array of 4 multiple choice options.'),
+    answer: z.string().describe('The correct answer. Must be one of the options.'),
+});
+
 const GenerateFromTopicOutputSchema = z.object({
   notes: z.string().describe('The generated notes in markdown format.'),
-  quiz: z.string().describe('The generated quiz questions and answers.'),
+  quiz: z.object({
+    questions: z.array(QuizQuestionSchema).describe('An array of quiz questions.'),
+  }),
   flashcards: z.array(
     z.object({
       question: z.string().describe('The flashcard question.'),
@@ -40,7 +48,7 @@ const prompt = ai.definePrompt({
 
 The study materials should include:
 1.  **Notes**: A summary of the key concepts, definitions, and important points about the topic. Format this as markdown.
-2.  **Quiz**: A multiple-choice quiz with 5 questions to test understanding. Format this as a plain text string. Each question should be on a new line, followed by options (A, B, C, D) on their own lines, and finally the correct answer on its own line starting with "Answer:". Separate each question block with a blank line.
+2.  **Quiz**: A multiple-choice quiz with 5 questions to test understanding. Each question should have 4 options and a correct answer.
 3.  **Flashcards**: A set of 5-10 flashcards with a clear question and a concise answer for key terms and concepts.
 
 Topic: {{{topic}}}

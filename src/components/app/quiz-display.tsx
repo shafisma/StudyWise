@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, type FC } from 'react';
+import { useState, type FC } from 'react';
 import { Check, X, ChevronsRight, Award } from 'lucide-react';
 import {
   Carousel,
@@ -25,50 +25,10 @@ interface Question {
 }
 
 interface QuizDisplayProps {
-  quizData: string;
+  questions: Question[];
 }
 
-const parseQuiz = (quizText: string): Question[] => {
-  if (!quizText) return [];
-  try {
-    const questions: Question[] = [];
-    const questionBlocks = quizText.trim().split(/\n\s*\n/);
-
-    for (const block of questionBlocks) {
-      const lines = block.split('\n').filter((line) => line.trim() !== '');
-      if (lines.length < 2) continue;
-
-      const questionLine = lines.find((line) => /^\d+\.\s/.test(line));
-      if (!questionLine) continue;
-      const question = questionLine.replace(/^\d+\.\s/, '').trim();
-
-      const options = lines
-        .filter((line) => /^[A-Z][\).]/.test(line))
-        .map((line) => line.replace(/^[A-Z][\).]\s*/, '').trim());
-
-      const answerLine = lines.find((line) => /^Answer:\s*[A-Z]/.test(line));
-      if (!answerLine) continue;
-      const correctOptionLetter = answerLine.match(/^Answer:\s*([A-Z])/)?.[1];
-      if (!correctOptionLetter) continue;
-
-      const correctOptionIndex = correctOptionLetter.charCodeAt(0) - 'A'.charCodeAt(0);
-      if (correctOptionIndex < 0 || correctOptionIndex >= options.length) continue;
-
-      questions.push({
-        question,
-        options,
-        answer: options[correctOptionIndex],
-      });
-    }
-    return questions;
-  } catch (error) {
-    console.error("Failed to parse quiz:", error);
-    return [];
-  }
-};
-
-const QuizDisplay: FC<QuizDisplayProps> = ({ quizData }) => {
-  const questions = useMemo(() => parseQuiz(quizData), [quizData]);
+const QuizDisplay: FC<QuizDisplayProps> = ({ questions }) => {
   const [selectedAnswers, setSelectedAnswers] = useState<(string | undefined)[]>(Array(questions.length).fill(undefined));
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [score, setScore] = useState(0);
@@ -104,15 +64,7 @@ const QuizDisplay: FC<QuizDisplayProps> = ({ quizData }) => {
   if (questions.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center">
-        <p className="text-muted-foreground mb-4">Could not parse the quiz.</p>
-        <Card className="w-full text-left">
-          <CardHeader>
-            <CardTitle>Raw Quiz Text</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <pre className="whitespace-pre-wrap text-sm bg-muted p-4 rounded-md">{quizData}</pre>
-          </CardContent>
-        </Card>
+        <p className="text-muted-foreground mb-4">No quiz questions were generated.</p>
       </div>
     );
   }
@@ -143,7 +95,7 @@ const QuizDisplay: FC<QuizDisplayProps> = ({ quizData }) => {
             <p className="text-sm text-muted-foreground">Question {current + 1} of {questions.length}</p>
             <Progress value={((current + 1) / questions.length) * 100} className="w-1/2" />
         </div>
-      <Carousel setApi={setApi} className="w-full">
+      <Carousel setApi={setApi} className="w-full max-w-md mx-auto">
         <CarouselContent>
           {questions.map((q, i) => (
             <CarouselItem key={i}>

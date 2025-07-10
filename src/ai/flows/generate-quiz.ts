@@ -16,8 +16,14 @@ const GenerateQuizInputSchema = z.object({
 });
 export type GenerateQuizInput = z.infer<typeof GenerateQuizInputSchema>;
 
+const QuizQuestionSchema = z.object({
+    question: z.string().describe('The question.'),
+    options: z.array(z.string()).describe('An array of 4 multiple choice options.'),
+    answer: z.string().describe('The correct answer. Must be one of the options.'),
+});
+
 const GenerateQuizOutputSchema = z.object({
-  quiz: z.string().describe('The generated quiz questions and answers.'),
+  questions: z.array(QuizQuestionSchema).describe('An array of quiz questions.'),
 });
 export type GenerateQuizOutput = z.infer<typeof GenerateQuizOutputSchema>;
 
@@ -29,7 +35,7 @@ const prompt = ai.definePrompt({
   name: 'generateQuizPrompt',
   input: {schema: GenerateQuizInputSchema},
   output: {schema: GenerateQuizOutputSchema},
-  prompt: `You are a quiz generator. Generate a quiz based on the following text: {{{text}}}. The quiz should include multiple choice questions and answers.`,
+  prompt: `You are a quiz generator. Generate a quiz based on the following text: {{{text}}}. The quiz should include multiple choice questions with 4 options and a correct answer.`,
 });
 
 const generateQuizFlow = ai.defineFlow(
