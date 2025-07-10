@@ -9,6 +9,7 @@ import {
   BrainCircuit,
   PanelLeft,
   History,
+  MessageCircleQuestion,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -27,6 +28,7 @@ const navItems = [
   { href: '/notes', icon: FileText, label: 'Notes' },
   { href: '/quiz', icon: FileQuestion, label: 'Quiz' },
   { href: '/flashcards', icon: Layers, label: 'Flashcards' },
+  { href: '/eli5', icon: MessageCircleQuestion, label: 'ELI5' },
   { href: '/history', icon: History, label: 'History' },
 ];
 

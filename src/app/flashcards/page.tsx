@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { BrainCircuit, Loader2, Wand2 } from 'lucide-react';
+import Image from 'next/image';
+import { BrainCircuit, Loader2, Wand2, Layers, BookOpen } from 'lucide-react';
 
 import { generateFlashcards, type GenerateFlashcardsOutput } from '@/ai/flows/generate-flashcards';
 import { generateFromTopic } from '@/ai/flows/generate-from-topic';
@@ -17,11 +18,17 @@ import { Input } from '@/components/ui/input';
 
 type GenerationMode = 'from-text' | 'from-topic';
 
+interface GeneratedContent {
+    flashcards: GenerateFlashcardsOutput['flashcards'];
+    image?: string;
+}
+
+
 export default function FlashcardsPage() {
   const [generationMode, setGenerationMode] = useState<GenerationMode>('from-text');
   const [text, setText] = useState('');
   const [topic, setTopic] = useState('');
-  const [generatedContent, setGeneratedContent] = useState<GenerateFlashcardsOutput | null>(null);
+  const [generatedContent, setGeneratedContent] = useState<GeneratedContent | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
@@ -48,12 +55,12 @@ export default function FlashcardsPage() {
     setGeneratedContent(null);
 
     try {
-      let result;
+      let result: GeneratedContent;
       if (generationMode === 'from-text') {
         result = await generateFlashcards({ text });
       } else { // from-topic
         const topicResult = await generateFromTopic({ topic });
-        result = { flashcards: topicResult.flashcards };
+        result = { flashcards: topicResult.flashcards, image: topicResult.image };
       }
       setGeneratedContent(result);
     } catch (error) {
@@ -89,12 +96,29 @@ export default function FlashcardsPage() {
       );
     }
 
-    return <FlashcardsDisplay flashcards={generatedContent.flashcards} />;
+    return (
+        <>
+            {generatedContent.image && (
+                 <div className="mb-6 rounded-lg overflow-hidden aspect-video relative w-full max-w-md mx-auto">
+                    <Image src={generatedContent.image} alt="Generated cover image" layout="fill" objectFit="cover" data-ai-hint="flashcards"/>
+                </div>
+            )}
+            <FlashcardsDisplay flashcards={generatedContent.flashcards} />
+        </>
+    );
   };
 
   return (
     <div className="flex flex-col flex-1 p-4 md:p-6">
-      <h1 className="text-2xl font-semibold mb-4">Generate Flashcards</h1>
+      <div className="flex items-center gap-4 mb-6">
+        <div className="p-3 bg-primary/10 rounded-full border border-primary/20">
+          <Layers className="h-6 w-6 text-primary" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Generate Flashcards</h1>
+          <p className="text-muted-foreground">Create interactive flashcards to memorize key info.</p>
+        </div>
+      </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
           <div className="space-y-6">
              <Card>
@@ -105,8 +129,8 @@ export default function FlashcardsPage() {
                   className="w-full"
                 >
                   <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="from-text">Use my text</TabsTrigger>
-                    <TabsTrigger value="from-topic">Make it from scratch</TabsTrigger>
+                    <TabsTrigger value="from-text"><Layers className="mr-2"/>Use my text</TabsTrigger>
+                    <TabsTrigger value="from-topic"><BookOpen className="mr-2"/>From a topic</TabsTrigger>
                   </TabsList>
                 </Tabs>
               </CardHeader>
@@ -153,7 +177,7 @@ export default function FlashcardsPage() {
               <CardTitle>Generated Flashcards</CardTitle>
               <CardDescription>Review your key concepts.</CardDescription>
             </CardHeader>
-            <CardContent className="flex-1 flex items-center justify-center">
+            <CardContent className="flex-1 flex flex-col items-center justify-center">
               {renderContent()}
             </CardContent>
           </Card>

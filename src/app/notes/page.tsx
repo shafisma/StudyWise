@@ -1,14 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { BrainCircuit, Loader2, Wand2 } from 'lucide-react';
+import Image from 'next/image';
+import { BrainCircuit, Loader2, Wand2, FileText, BookOpen } from 'lucide-react';
 
 import { generateNotes } from '@/ai/flows/generate-notes';
-import { generateFromTopic } from '@/ai/flows/generate-from-topic';
+import { generateFromTopic, type GenerateFromTopicOutput } from '@/ai/flows/generate-from-topic';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import NotesDisplay from '@/components/app/notes-display';
@@ -21,7 +22,7 @@ export default function NotesPage() {
   const [generationMode, setGenerationMode] = useState<GenerationMode>('from-text');
   const [text, setText] = useState('');
   const [topic, setTopic] = useState('');
-  const [generatedContent, setGeneratedContent] = useState<string | null>(null);
+  const [generatedContent, setGeneratedContent] = useState<Partial<GenerateFromTopicOutput> | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
@@ -53,9 +54,9 @@ export default function NotesPage() {
         result = await generateNotes({ text });
       } else { // from-topic
         const topicResult = await generateFromTopic({ topic });
-        result = { notes: topicResult.notes };
+        result = { notes: topicResult.notes, image: topicResult.image };
       }
-      setGeneratedContent(result.notes);
+      setGeneratedContent(result);
     } catch (error) {
       console.error('Error generating content:', error);
       toast({
@@ -72,6 +73,7 @@ export default function NotesPage() {
     if (isLoading) {
       return (
         <div className="p-6 space-y-4">
+          <Skeleton className="h-48 w-full" />
           <Skeleton className="h-8 w-1/3" />
           <Skeleton className="h-4 w-full" />
           <Skeleton className="h-4 w-full" />
@@ -80,7 +82,7 @@ export default function NotesPage() {
       );
     }
 
-    if (!generatedContent) {
+    if (!generatedContent || !generatedContent.notes) {
       return (
         <div className="flex flex-col items-center justify-center h-full text-center p-8">
           <BrainCircuit className="h-16 w-16 text-muted-foreground/50 mb-4" />
@@ -92,12 +94,29 @@ export default function NotesPage() {
       );
     }
 
-    return <NotesDisplay notes={generatedContent} />;
+    return (
+        <>
+        {generatedContent.image && (
+            <div className="mb-6 rounded-lg overflow-hidden aspect-video relative">
+                <Image src={generatedContent.image} alt="Generated cover image" layout="fill" objectFit="cover" data-ai-hint="study notes"/>
+            </div>
+        )}
+        <NotesDisplay notes={generatedContent.notes} />
+        </>
+    )
   };
 
   return (
     <div className="flex flex-col flex-1 p-4 md:p-6">
-      <h1 className="text-2xl font-semibold mb-4">Generate Notes</h1>
+      <div className="flex items-center gap-4 mb-6">
+        <div className="p-3 bg-primary/10 rounded-full border border-primary/20">
+          <FileText className="h-6 w-6 text-primary" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Generate Notes</h1>
+          <p className="text-muted-foreground">Summarize text or create notes from a topic.</p>
+        </div>
+      </div>
        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
           <div className="space-y-6">
              <Card>
@@ -108,8 +127,8 @@ export default function NotesPage() {
                   className="w-full"
                 >
                   <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="from-text">Use my text</TabsTrigger>
-                    <TabsTrigger value="from-topic">Make it from scratch</TabsTrigger>
+                    <TabsTrigger value="from-text"><FileText className="mr-2"/>Use my text</TabsTrigger>
+                    <TabsTrigger value="from-topic"><BookOpen className="mr-2"/>From a topic</TabsTrigger>
                   </TabsList>
                 </Tabs>
               </CardHeader>
