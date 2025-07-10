@@ -72,9 +72,9 @@ export default function Eli5Page() {
 
     return (
       <>
-        {generatedContent.image && (
+        {generatedContent.imageHint && (
           <div className="mb-6 rounded-lg overflow-hidden aspect-video relative">
-            <Image src={generatedContent.image} alt="Generated illustration" layout="fill" objectFit="cover" data-ai-hint="illustration simple"/>
+            <Image src={`https://placehold.co/600x400.png`} alt="Generated illustration" layout="fill" objectFit="cover" data-ai-hint={generatedContent.imageHint}/>
           </div>
         )}
         <NotesDisplay notes={generatedContent.explanation} />
@@ -121,7 +121,7 @@ export default function Eli5Page() {
           </Card>
         </div>
 
-        <Card className="lg:sticky top-8 min-h-[400px] lg:min-h-[600px] flex flex-col">
+        <Card className="lg:sticky top-24 min-h-[400px] lg:min-h-[600px] flex flex-col">
           <CardHeader>
             <CardTitle>Simple Explanation</CardTitle>
             <CardDescription>Here's the topic, simplified.</CardDescription>

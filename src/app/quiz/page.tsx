@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import Image from 'next/image';
-import { BrainCircuit, Loader2, Wand2, FileQuestion, BookOpen } from 'lucide-react';
+import { BrainCircuit, Loader2, Wand2, FileQuestion, BookOpen, Upload, Download } from 'lucide-react';
 
 import { generateQuiz, type GenerateQuizOutput } from '@/ai/flows/generate-quiz';
-import { generateFromTopic } from '@/ai/flows/generate-from-topic';
+import { generateFromTopic, type GenerateFromTopicOutput } from '@/ai/flows/generate-from-topic';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,8 +19,11 @@ import { Input } from '@/components/ui/input';
 type GenerationMode = 'from-text' | 'from-topic';
 
 interface GeneratedContent {
-    questions: GenerateQuizOutput['questions'];
-    image?: string;
+    notes?: string;
+    quiz: { questions: GenerateQuizOutput['questions'] };
+    flashcards?: any[];
+    imageHint?: string;
+    sourceTopic?: string;
 }
 
 export default function QuizPage() {
@@ -30,6 +33,7 @@ export default function QuizPage() {
   const [generatedContent, setGeneratedContent] = useState<GeneratedContent | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleGenerate = async () => {
     if (generationMode === 'from-text' && !text.trim()) {
@@ -57,11 +61,17 @@ export default function QuizPage() {
       let result: GeneratedContent;
       if (generationMode === 'from-text') {
         const textResult = await generateQuiz({ text });
-        result = { questions: textResult.questions }
+        result = { quiz: { questions: textResult.questions } }
       } else { // from-topic
         const topicResult = await generateFromTopic({ topic });
         if (topicResult.quiz && topicResult.quiz.questions) {
-           result = { questions: topicResult.quiz.questions, image: topicResult.image };
+           result = { 
+                notes: topicResult.notes,
+                quiz: topicResult.quiz,
+                flashcards: topicResult.flashcards,
+                imageHint: topicResult.imageHint,
+                sourceTopic: topic,
+            };
         } else {
           throw new Error("Quiz could not be generated from the topic.");
         }
@@ -77,6 +87,55 @@ export default function QuizPage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const content = JSON.parse(e.target?.result as string);
+           if (!content.quiz || !content.quiz.questions) {
+            throw new Error("Invalid file format: missing quiz data.");
+          }
+          setGeneratedContent(content);
+          if (content.sourceTopic) {
+              setTopic(content.sourceTopic);
+              setGenerationMode('from-topic');
+          } else {
+              setGenerationMode('from-text');
+              const combinedText = content.quiz.questions.map((q: any) => `${q.question} ${q.options.join(' ')}`).join('\n');
+              setText(combinedText);
+          }
+           toast({
+            title: 'Content Loaded',
+            description: 'Your study materials have been imported.',
+          });
+        } catch (error) {
+          toast({
+            variant: 'destructive',
+            title: 'Import Failed',
+            description: 'The selected file is not a valid StudyWise JSON file.',
+          });
+        }
+      };
+      reader.readAsText(file);
+    }
+    if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+    }
+  };
+
+  const handleFileExport = () => {
+    if (!generatedContent) return;
+    const blob = new Blob([JSON.stringify(generatedContent, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `studywise-quiz-${generatedContent.sourceTopic || 'custom'}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
   
   const saveQuizResult = (score: number, totalQuestions: number) => {
@@ -105,13 +164,13 @@ export default function QuizPage() {
       );
     }
 
-    if (!generatedContent || !generatedContent.questions) {
+    if (!generatedContent || !generatedContent.quiz || !generatedContent.quiz.questions) {
       return (
         <div className="flex flex-col items-center justify-center h-full text-center p-8">
           <BrainCircuit className="h-16 w-16 text-muted-foreground/50 mb-4" />
           <h3 className="text-lg font-semibold">Your quiz will appear here</h3>
           <p className="text-sm text-muted-foreground">
-            Enter some text or a topic to get started.
+            Enter some text, a topic, or import a file to get started.
           </p>
         </div>
       );
@@ -119,12 +178,12 @@ export default function QuizPage() {
 
     return (
         <>
-            {generatedContent.image && (
+            {generatedContent.imageHint && (
                 <div className="mb-6 rounded-lg overflow-hidden aspect-video relative">
-                    <Image src={generatedContent.image} alt="Generated cover image" layout="fill" objectFit="cover" data-ai-hint="quiz"/>
+                    <Image src={`https://placehold.co/600x400.png`} alt="Generated cover image" layout="fill" objectFit="cover" data-ai-hint={generatedContent.imageHint}/>
                 </div>
             )}
-            <QuizDisplay questions={generatedContent.questions} onQuizSubmit={saveQuizResult} />
+            <QuizDisplay questions={generatedContent.quiz.questions} onQuizSubmit={saveQuizResult} />
         </>
     );
   };
@@ -180,7 +239,7 @@ export default function QuizPage() {
                   </>
                 )}
               </CardContent>
-               <CardFooter>
+               <CardFooter className="flex-col sm:flex-row gap-2">
                  <Button onClick={handleGenerate} disabled={isLoading} className="w-full" size="lg">
                   {isLoading ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -189,11 +248,24 @@ export default function QuizPage() {
                   )}
                   Generate Quiz
                 </Button>
+                 <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileUpload}
+                    accept=".json"
+                    className="hidden"
+                />
+                 <Button onClick={() => fileInputRef.current?.click()} variant="outline" className="w-full sm:w-auto" size="lg" title="Import from file">
+                    <Upload className="h-4 w-4" />
+                </Button>
+                <Button onClick={handleFileExport} disabled={!generatedContent} variant="outline" className="w-full sm:w-auto" size="lg" title="Export to file">
+                    <Download className="h-4 w-4" />
+                </Button>
               </CardFooter>
             </Card>
           </div>
 
-          <Card className="lg:sticky top-8 min-h-[400px] lg:min-h-[600px] flex flex-col">
+          <Card className="lg:sticky top-24 min-h-[400px] lg:min-h-[600px] flex flex-col">
             <CardHeader>
               <CardTitle>Generated Quiz</CardTitle>
               <CardDescription>Test your knowledge.</CardDescription>

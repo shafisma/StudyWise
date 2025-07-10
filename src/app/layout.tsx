@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
-import { SidebarProvider } from '@/components/ui/sidebar';
 import AppShell from '@/components/app/app-shell';
 import { Inter as FontSans } from 'next/font/google';
 import { cn } from '@/lib/utils';
@@ -25,11 +24,9 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head />
       <body className={cn("min-h-screen bg-background font-sans antialiased", fontSans.variable)}>
-        <SidebarProvider>
           <AppShell>
             {children}
           </AppShell>
-        </SidebarProvider>
         <Toaster />
       </body>
     </html>

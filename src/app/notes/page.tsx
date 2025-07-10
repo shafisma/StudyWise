@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import Image from 'next/image';
-import { BrainCircuit, Loader2, Wand2, FileText, BookOpen } from 'lucide-react';
+import { BrainCircuit, Loader2, Wand2, FileText, BookOpen, Upload, Download } from 'lucide-react';
 
 import { generateNotes } from '@/ai/flows/generate-notes';
 import { generateFromTopic, type GenerateFromTopicOutput } from '@/ai/flows/generate-from-topic';
@@ -18,13 +18,22 @@ import { Input } from '@/components/ui/input';
 
 type GenerationMode = 'from-text' | 'from-topic';
 
+interface GeneratedContent {
+    notes?: string;
+    quiz?: { questions: any[] };
+    flashcards?: any[];
+    imageHint?: string;
+    sourceTopic?: string;
+}
+
 export default function NotesPage() {
   const [generationMode, setGenerationMode] = useState<GenerationMode>('from-text');
   const [text, setText] = useState('');
   const [topic, setTopic] = useState('');
-  const [generatedContent, setGeneratedContent] = useState<Partial<GenerateFromTopicOutput> | null>(null);
+  const [generatedContent, setGeneratedContent] = useState<GeneratedContent | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleGenerate = async () => {
     if (generationMode === 'from-text' && !text.trim()) {
@@ -49,12 +58,18 @@ export default function NotesPage() {
     setGeneratedContent(null);
 
     try {
-      let result;
+      let result: GeneratedContent;
       if (generationMode === 'from-text') {
         result = await generateNotes({ text });
       } else { // from-topic
         const topicResult = await generateFromTopic({ topic });
-        result = { notes: topicResult.notes, image: topicResult.image };
+        result = { 
+          notes: topicResult.notes,
+          quiz: topicResult.quiz,
+          flashcards: topicResult.flashcards,
+          imageHint: topicResult.imageHint,
+          sourceTopic: topic,
+        };
       }
       setGeneratedContent(result);
     } catch (error) {
@@ -68,6 +83,52 @@ export default function NotesPage() {
       setIsLoading(false);
     }
   };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const content = JSON.parse(e.target?.result as string);
+          setGeneratedContent(content);
+          if (content.sourceTopic) {
+              setTopic(content.sourceTopic);
+              setGenerationMode('from-topic');
+          } else {
+              setGenerationMode('from-text');
+              setText(content.notes || '');
+          }
+           toast({
+            title: 'Content Loaded',
+            description: 'Your study materials have been imported.',
+          });
+        } catch (error) {
+          toast({
+            variant: 'destructive',
+            title: 'Import Failed',
+            description: 'The selected file is not a valid StudyWise JSON file.',
+          });
+        }
+      };
+      reader.readAsText(file);
+    }
+    if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+    }
+  };
+
+  const handleFileExport = () => {
+    if (!generatedContent) return;
+    const blob = new Blob([JSON.stringify(generatedContent, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `studywise-notes-${generatedContent.sourceTopic || 'custom'}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
 
   const renderContent = () => {
     if (isLoading) {
@@ -88,7 +149,7 @@ export default function NotesPage() {
           <BrainCircuit className="h-16 w-16 text-muted-foreground/50 mb-4" />
           <h3 className="text-lg font-semibold">Your study notes will appear here</h3>
           <p className="text-sm text-muted-foreground">
-            Enter some text or a topic to get started.
+            Enter some text, a topic, or import a file to get started.
           </p>
         </div>
       );
@@ -96,9 +157,9 @@ export default function NotesPage() {
 
     return (
         <>
-        {generatedContent.image && (
+        {generatedContent.imageHint && (
             <div className="mb-6 rounded-lg overflow-hidden aspect-video relative">
-                <Image src={generatedContent.image} alt="Generated cover image" layout="fill" objectFit="cover" data-ai-hint="study notes"/>
+                <Image src={`https://placehold.co/600x400.png`} alt="Generated cover image" layout="fill" objectFit="cover" data-ai-hint={generatedContent.imageHint}/>
             </div>
         )}
         <NotesDisplay notes={generatedContent.notes} />
@@ -157,7 +218,7 @@ export default function NotesPage() {
                   </>
                 )}
               </CardContent>
-               <CardFooter>
+               <CardFooter className="flex-col sm:flex-row gap-2">
                  <Button onClick={handleGenerate} disabled={isLoading} className="w-full" size="lg">
                   {isLoading ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -166,11 +227,24 @@ export default function NotesPage() {
                   )}
                   Generate Notes
                 </Button>
+                 <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileUpload}
+                    accept=".json"
+                    className="hidden"
+                />
+                 <Button onClick={() => fileInputRef.current?.click()} variant="outline" className="w-full sm:w-auto" size="lg" title="Import from file">
+                    <Upload className="h-4 w-4" />
+                </Button>
+                <Button onClick={handleFileExport} disabled={!generatedContent} variant="outline" className="w-full sm:w-auto" size="lg" title="Export to file">
+                    <Download className="h-4 w-4" />
+                </Button>
               </CardFooter>
             </Card>
           </div>
 
-          <Card className="lg:sticky top-8 min-h-[400px] lg:min-h-[600px] flex flex-col">
+          <Card className="lg:sticky top-24 min-h-[400px] lg:min-h-[600px] flex flex-col">
             <CardHeader>
               <CardTitle>Generated Notes</CardTitle>
               <CardDescription>Your AI-generated notes.</CardDescription>

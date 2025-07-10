@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import Image from 'next/image';
-import { BrainCircuit, Loader2, Wand2, Layers, BookOpen } from 'lucide-react';
+import { BrainCircuit, Loader2, Wand2, Layers, BookOpen, Upload, Download } from 'lucide-react';
 
 import { generateFlashcards, type GenerateFlashcardsOutput } from '@/ai/flows/generate-flashcards';
-import { generateFromTopic } from '@/ai/flows/generate-from-topic';
+import { generateFromTopic, type GenerateFromTopicOutput } from '@/ai/flows/generate-from-topic';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,7 +20,10 @@ type GenerationMode = 'from-text' | 'from-topic';
 
 interface GeneratedContent {
     flashcards: GenerateFlashcardsOutput['flashcards'];
-    image?: string;
+    notes?: string;
+    quiz?: { questions: any[] };
+    imageHint?: string;
+    sourceTopic?: string;
 }
 
 
@@ -31,6 +34,7 @@ export default function FlashcardsPage() {
   const [generatedContent, setGeneratedContent] = useState<GeneratedContent | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleGenerate = async () => {
     if (generationMode === 'from-text' && !text.trim()) {
@@ -60,7 +64,13 @@ export default function FlashcardsPage() {
         result = await generateFlashcards({ text });
       } else { // from-topic
         const topicResult = await generateFromTopic({ topic });
-        result = { flashcards: topicResult.flashcards, image: topicResult.image };
+        result = { 
+            flashcards: topicResult.flashcards,
+            notes: topicResult.notes,
+            quiz: topicResult.quiz,
+            imageHint: topicResult.imageHint,
+            sourceTopic: topic,
+        };
       }
       setGeneratedContent(result);
     } catch (error) {
@@ -75,6 +85,54 @@ export default function FlashcardsPage() {
     }
   };
 
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const content = JSON.parse(e.target?.result as string);
+          setGeneratedContent(content);
+          if (content.sourceTopic) {
+              setTopic(content.sourceTopic);
+              setGenerationMode('from-topic');
+          } else {
+              setGenerationMode('from-text');
+              // Heuristic to set text field, might not be perfect
+              const combinedText = content.flashcards.map((fc: any) => `${fc.question} ${fc.answer}`).join('\n');
+              setText(combinedText);
+          }
+           toast({
+            title: 'Content Loaded',
+            description: 'Your study materials have been imported.',
+          });
+        } catch (error) {
+          toast({
+            variant: 'destructive',
+            title: 'Import Failed',
+            description: 'The selected file is not a valid StudyWise JSON file.',
+          });
+        }
+      };
+      reader.readAsText(file);
+    }
+     // Reset file input
+    if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+    }
+  };
+
+  const handleFileExport = () => {
+    if (!generatedContent) return;
+    const blob = new Blob([JSON.stringify(generatedContent, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `studywise-flashcards-${generatedContent.sourceTopic || 'custom'}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const renderContent = () => {
     if (isLoading) {
       return (
@@ -84,13 +142,13 @@ export default function FlashcardsPage() {
       );
     }
 
-    if (!generatedContent || !generatedContent.flashcards) {
+    if (!generatedContent || !generatedContent.flashcards || generatedContent.flashcards.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center h-full text-center p-8">
           <BrainCircuit className="h-16 w-16 text-muted-foreground/50 mb-4" />
           <h3 className="text-lg font-semibold">Your flashcards will appear here</h3>
           <p className="text-sm text-muted-foreground">
-            Enter some text or a topic to get started.
+            Enter some text, a topic, or import a file to get started.
           </p>
         </div>
       );
@@ -98,9 +156,9 @@ export default function FlashcardsPage() {
 
     return (
         <>
-            {generatedContent.image && (
+            {generatedContent.imageHint && (
                  <div className="mb-6 rounded-lg overflow-hidden aspect-video relative w-full max-w-md mx-auto">
-                    <Image src={generatedContent.image} alt="Generated cover image" layout="fill" objectFit="cover" data-ai-hint="flashcards"/>
+                    <Image src={`https://placehold.co/600x400.png`} alt="Generated cover image" layout="fill" objectFit="cover" data-ai-hint={generatedContent.imageHint}/>
                 </div>
             )}
             <FlashcardsDisplay flashcards={generatedContent.flashcards} />
@@ -159,7 +217,7 @@ export default function FlashcardsPage() {
                   </>
                 )}
               </CardContent>
-               <CardFooter>
+               <CardFooter className="flex-col sm:flex-row gap-2">
                  <Button onClick={handleGenerate} disabled={isLoading} className="w-full" size="lg">
                   {isLoading ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -168,11 +226,24 @@ export default function FlashcardsPage() {
                   )}
                   Generate Flashcards
                 </Button>
+                <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileUpload}
+                    accept=".json"
+                    className="hidden"
+                />
+                 <Button onClick={() => fileInputRef.current?.click()} variant="outline" className="w-full sm:w-auto" size="lg" title="Import from file">
+                    <Upload className="h-4 w-4" />
+                </Button>
+                <Button onClick={handleFileExport} disabled={!generatedContent} variant="outline" className="w-full sm:w-auto" size="lg" title="Export to file">
+                    <Download className="h-4 w-4" />
+                </Button>
               </CardFooter>
             </Card>
           </div>
 
-          <Card className="lg:sticky top-8 min-h-[400px] lg:min-h-[600px] flex flex-col">
+          <Card className="lg:sticky top-24 min-h-[400px] lg:min-h-[600px] flex flex-col">
             <CardHeader>
               <CardTitle>Generated Flashcards</CardTitle>
               <CardDescription>Review your key concepts.</CardDescription>

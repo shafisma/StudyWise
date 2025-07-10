@@ -1,9 +1,9 @@
 'use server';
 
 /**
- * @fileOverview Generates study materials from a topic, including an image.
+ * @fileOverview Generates study materials from a topic, including an image hint.
  *
- * - generateFromTopic - A function that generates notes, a quiz, flashcards, and an image from a given topic.
+ * - generateFromTopic - A function that generates notes, a quiz, flashcards, and an image hint from a given topic.
  * - GenerateFromTopicInput - The input type for the generateFromTopic function.
  * - GenerateFromTopicOutput - The return type for the generateFromTopic function.
  */
@@ -33,7 +33,7 @@ const GenerateFromTopicOutputSchema = z.object({
       answer: z.string().describe('The flashcard answer.'),
     })
   ).describe('The generated flashcards.'),
-  image: z.string().optional().describe('A data URI of a generated image relevant to the topic.'),
+  imageHint: z.string().optional().describe('A one or two word hint for a relevant image search query.'),
 });
 export type GenerateFromTopicOutput = z.infer<typeof GenerateFromTopicOutputSchema>;
 
@@ -51,31 +51,12 @@ The study materials should include:
 1.  **Notes**: A summary of the key concepts, definitions, and important points about the topic. Format this as markdown.
 2.  **Quiz**: A multiple-choice quiz with 5 questions to test understanding. Each question should have 4 options and a correct answer.
 3.  **Flashcards**: A set of 5-10 flashcards with a clear question and a concise answer for key terms and concepts.
+4.  **Image Hint**: A 1-2 word hint for a web search for a cover image for these study materials. For example, for "The basics of photosynthesis" you could provide "photosynthesis basics".
 
 Topic: {{{topic}}}
 
-Please provide the output in a single JSON object with the keys "notes", "quiz", and "flashcards". Do not include the "image" key in your response.
+Please provide the output in a single JSON object with the keys "notes", "quiz", "flashcards", and "imageHint".
 `,
-});
-
-const generateImageFlow = ai.defineFlow({
-    name: 'generateTopicImageFlow',
-    inputSchema: z.object({ topic: z.string() }),
-    outputSchema: z.string(),
-}, async ({ topic }) => {
-    try {
-        const { media } = await ai.generate({
-            model: 'googleai/gemini-2.0-flash-preview-image-generation',
-            prompt: `Generate an engaging and visually appealing cover image for study materials about "${topic}". The style should be modern, clean, and educational. Use a vibrant color palette. Minimalist or abstract styles are preferred.`,
-            config: {
-                responseModalities: ['TEXT', 'IMAGE'],
-            },
-        });
-        return media.url;
-    } catch (e) {
-        console.error("Image generation failed, returning empty string.", e);
-        return "";
-    }
 });
 
 
@@ -86,20 +67,12 @@ const generateFromTopicFlow = ai.defineFlow(
     outputSchema: GenerateFromTopicOutputSchema,
   },
   async input => {
-    const [contentResponse, imageUri] = await Promise.all([
-      generateContentPrompt(input),
-      generateImageFlow(input)
-    ]);
-    
-    const output = contentResponse.output;
+    const {output} = await generateContentPrompt(input);
 
     if (!output) {
       throw new Error("Failed to generate content from topic.");
     }
 
-    return {
-      ...output,
-      image: imageUri,
-    };
+    return output;
   }
 );
