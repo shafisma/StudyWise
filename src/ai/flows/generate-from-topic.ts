@@ -40,7 +40,7 @@ const prompt = ai.definePrompt({
 
 The study materials should include:
 1.  **Notes**: A summary of the key concepts, definitions, and important points about the topic. Format this as markdown.
-2.  **Quiz**: A multiple-choice quiz with 5 questions to test understanding. Provide the question, options (A, B, C, D), and the correct answer.
+2.  **Quiz**: A multiple-choice quiz with 5 questions to test understanding. Format this as a plain text string. Each question should be on a new line, followed by options (A, B, C, D) on their own lines, and finally the correct answer on its own line starting with "Answer:". Separate each question block with a blank line.
 3.  **Flashcards**: A set of 5-10 flashcards with a clear question and a concise answer for key terms and concepts.
 
 Topic: {{{topic}}}
