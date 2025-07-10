@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type FC } from 'react';
-import { Check, X, ChevronsRight, Award } from 'lucide-react';
+import { Check, X, ChevronsRight, Award, History, ArrowLeft } from 'lucide-react';
 import {
   Carousel,
   CarouselApi,
@@ -26,11 +26,13 @@ interface Question {
 
 interface QuizDisplayProps {
   questions: Question[];
+  onQuizSubmit: (score: number, totalQuestions: number) => void;
 }
 
-const QuizDisplay: FC<QuizDisplayProps> = ({ questions }) => {
+const QuizDisplay: FC<QuizDisplayProps> = ({ questions, onQuizSubmit }) => {
   const [selectedAnswers, setSelectedAnswers] = useState<(string | undefined)[]>(Array(questions.length).fill(undefined));
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isReviewing, setIsReviewing] = useState(false);
   const [score, setScore] = useState(0);
   const [api, setApi] = React.useState<CarouselApi>();
   const [current, setCurrent] = React.useState(0);
@@ -44,6 +46,7 @@ const QuizDisplay: FC<QuizDisplayProps> = ({ questions }) => {
   }, [api]);
 
   const handleAnswerSelect = (questionIndex: number, answer: string) => {
+    if (isReviewing) return;
     const newAnswers = [...selectedAnswers];
     newAnswers[questionIndex] = answer;
     setSelectedAnswers(newAnswers);
@@ -58,7 +61,20 @@ const QuizDisplay: FC<QuizDisplayProps> = ({ questions }) => {
     }
     setScore(newScore);
     setIsSubmitted(true);
+    setIsReviewing(false);
+    onQuizSubmit(newScore, questions.length);
     api?.scrollTo(0, true);
+  };
+  
+  const handleReview = () => {
+    setIsSubmitted(false);
+    setIsReviewing(true);
+    api?.scrollTo(0, true);
+  };
+
+  const handleBackToScoreboard = () => {
+    setIsSubmitted(true);
+    setIsReviewing(false);
   };
 
   if (questions.length === 0) {
@@ -84,7 +100,10 @@ const QuizDisplay: FC<QuizDisplayProps> = ({ questions }) => {
                  <Progress value={(score / questions.length) * 100} className="w-full" />
             </CardContent>
         </Card>
-        <Button onClick={() => setIsSubmitted(false)} variant="outline" className="w-full">Review Answers</Button>
+        <Button onClick={handleReview} variant="outline" className="w-full">
+            <History className="mr-2 h-4 w-4" />
+            Review Answers
+        </Button>
       </div>
     );
   }
@@ -107,25 +126,35 @@ const QuizDisplay: FC<QuizDisplayProps> = ({ questions }) => {
                   <RadioGroup
                     value={selectedAnswers[i]}
                     onValueChange={(value) => handleAnswerSelect(i, value)}
-                    disabled={isSubmitted}
+                    disabled={isReviewing}
                     className="space-y-2"
                   >
                     {q.options.map((option, j) => {
-                      const isCorrect = option === q.answer;
-                      const isSelected = selectedAnswers[i] === option;
+                      const isCorrectAnswer = option === q.answer;
+                      const isSelectedAnswer = selectedAnswers[i] === option;
+                      
+                      let variantClass = "";
+                      if (isReviewing) {
+                        if (isCorrectAnswer) {
+                            variantClass = "bg-primary/20 border-primary";
+                        } else if (isSelectedAnswer && !isCorrectAnswer) {
+                            variantClass = "bg-destructive/20 border-destructive";
+                        }
+                      }
+
                       return (
                         <Label
                           key={j}
                           className={cn(
-                            "flex items-center space-x-3 rounded-md border p-4 transition-colors hover:bg-accent/50",
-                            isSubmitted && isSelected && !isCorrect && "bg-destructive/20 border-destructive",
-                            isSubmitted && isCorrect && "bg-primary/20 border-primary"
+                            "flex items-center space-x-3 rounded-md border p-4 transition-colors",
+                            !isReviewing && "hover:bg-accent/50",
+                            variantClass
                           )}
                         >
-                          <RadioGroupItem value={option} />
+                          <RadioGroupItem value={option} disabled={isReviewing} />
                           <span>{option}</span>
-                          {isSubmitted && isSelected && !isCorrect && <X className="ml-auto h-5 w-5 text-destructive" />}
-                          {isSubmitted && isCorrect && <Check className="ml-auto h-5 w-5 text-primary" />}
+                          {isReviewing && isSelectedAnswer && !isCorrectAnswer && <X className="ml-auto h-5 w-5 text-destructive" />}
+                          {isReviewing && isCorrectAnswer && <Check className="ml-auto h-5 w-5 text-primary" />}
                         </Label>
                       );
                     })}
@@ -139,9 +168,16 @@ const QuizDisplay: FC<QuizDisplayProps> = ({ questions }) => {
         <CarouselNext />
       </Carousel>
 
-      {selectedAnswers.every((a) => a !== undefined) && !isSubmitted && (
+      {!isReviewing && selectedAnswers.every((a) => a !== undefined) && (
         <Button onClick={handleSubmit} className="w-full">
           Submit Quiz <ChevronsRight className="ml-2 h-4 w-4" />
+        </Button>
+      )}
+
+      {isReviewing && (
+        <Button onClick={handleBackToScoreboard} className="w-full" variant="outline">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Go back to scoreboard
         </Button>
       )}
     </div>

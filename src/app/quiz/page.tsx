@@ -53,12 +53,9 @@ export default function QuizPage() {
         result = await generateQuiz({ text });
       } else { // from-topic
         const topicResult = await generateFromTopic({ topic });
-        // The generateFromTopic flow returns the quiz nested in a 'quiz' property.
-        // We need to extract it to match the GenerateQuizOutput type.
         if (topicResult.quiz) {
           result = topicResult.quiz;
         } else {
-          // Handle cases where the quiz might not be generated
           throw new Error("Quiz could not be generated from the topic.");
         }
       }
@@ -74,6 +71,19 @@ export default function QuizPage() {
       setIsLoading(false);
     }
   };
+  
+  const saveQuizResult = (score: number, totalQuestions: number) => {
+    const result = {
+      topic: generationMode === 'from-topic' ? topic : 'Custom Text',
+      score,
+      totalQuestions,
+      date: new Date().toISOString(),
+    };
+    const history = JSON.parse(localStorage.getItem('quizHistory') || '[]');
+    history.push(result);
+    localStorage.setItem('quizHistory', JSON.stringify(history));
+  }
+
 
   const renderContent = () => {
     if (isLoading) {
@@ -99,7 +109,7 @@ export default function QuizPage() {
       );
     }
 
-    return <QuizDisplay questions={generatedContent.questions} />;
+    return <QuizDisplay questions={generatedContent.questions} onQuizSubmit={saveQuizResult} />;
   };
 
   return (

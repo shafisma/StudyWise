@@ -8,6 +8,7 @@ import {
   Layers,
   BrainCircuit,
   PanelLeft,
+  History,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -26,6 +27,7 @@ const navItems = [
   { href: '/notes', icon: FileText, label: 'Notes' },
   { href: '/quiz', icon: FileQuestion, label: 'Quiz' },
   { href: '/flashcards', icon: Layers, label: 'Flashcards' },
+  { href: '/history', icon: History, label: 'History' },
 ];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
