@@ -53,7 +53,14 @@ export default function QuizPage() {
         result = await generateQuiz({ text });
       } else { // from-topic
         const topicResult = await generateFromTopic({ topic });
-        result = topicResult.quiz;
+        // The generateFromTopic flow returns the quiz nested in a 'quiz' property.
+        // We need to extract it to match the GenerateQuizOutput type.
+        if (topicResult.quiz) {
+          result = topicResult.quiz;
+        } else {
+          // Handle cases where the quiz might not be generated
+          throw new Error("Quiz could not be generated from the topic.");
+        }
       }
       setGeneratedContent(result);
     } catch (error) {
