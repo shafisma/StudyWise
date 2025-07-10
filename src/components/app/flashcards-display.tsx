@@ -24,6 +24,14 @@ interface FlashcardsDisplayProps {
 }
 
 const FlashcardsDisplay: FC<FlashcardsDisplayProps> = ({ flashcards }) => {
+  if (!flashcards) {
+    return (
+      <div className="flex items-center justify-center h-full text-center">
+        <p className="text-muted-foreground">No flashcards generated.</p>
+      </div>
+    );
+  }
+
   const [flippedStates, setFlippedStates] = useState<boolean[]>(
     Array(flashcards.length).fill(false)
   );
@@ -34,7 +42,7 @@ const FlashcardsDisplay: FC<FlashcardsDisplayProps> = ({ flashcards }) => {
     setFlippedStates(newFlippedStates);
   };
 
-  if (!flashcards || flashcards.length === 0) {
+  if (flashcards.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-center">
         <p className="text-muted-foreground">No flashcards generated.</p>
