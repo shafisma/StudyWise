@@ -93,7 +93,7 @@ export default function LandingPage() {
                   <p className="text-muted-foreground">
                     Generate a unique cover image for your study materials when you create them from a topic.
                   </p>
-                </Content>
+                </CardContent>
               </Card>
             </div>
           </div>
