@@ -1,7 +1,7 @@
 'use server';
 
 /**
- * @fileOverview Generates a quiz from a given text input.
+ * @fileOverview Generates a quiz from a given text input or YouTube URL.
  *
  * - generateQuiz - A function that handles the quiz generation process.
  * - GenerateQuizInput - The input type for the generateQuiz function.
@@ -9,10 +9,12 @@
  */
 
 import {ai} from '@/ai/genkit';
+import { getYouTubeTranscript } from '@/services/youtube';
 import {z} from 'genkit';
 
 const GenerateQuizInputSchema = z.object({
-  text: z.string().describe('The text to generate a quiz from.'),
+  text: z.string().optional().describe('The text to generate a quiz from.'),
+  youtubeUrl: z.string().optional().describe('A YouTube video URL to generate a quiz from.'),
 });
 export type GenerateQuizInput = z.infer<typeof GenerateQuizInputSchema>;
 
@@ -20,6 +22,7 @@ const QuizQuestionSchema = z.object({
     question: z.string().describe('The question.'),
     options: z.array(z.string()).describe('An array of 4 multiple choice options.'),
     answer: z.string().describe('The correct answer. Must be one of the options.'),
+    emoji: z.string().optional().describe('A single emoji related to the question.'),
 });
 
 const GenerateQuizOutputSchema = z.object({
@@ -33,9 +36,9 @@ export async function generateQuiz(input: GenerateQuizInput): Promise<GenerateQu
 
 const prompt = ai.definePrompt({
   name: 'generateQuizPrompt',
-  input: {schema: GenerateQuizInputSchema},
+  input: { schema: z.object({ content: z.string() }) },
   output: {schema: GenerateQuizOutputSchema},
-  prompt: `You are a quiz generator. Generate a quiz based on the following text: {{{text}}}. The quiz should include multiple choice questions with 4 options and a correct answer.`,
+  prompt: `You are a quiz generator. Generate a quiz based on the following content: {{{content}}}. The quiz should include multiple choice questions with 4 options and a correct answer. For each question, also provide a single, relevant emoji.`,
 });
 
 const generateQuizFlow = ai.defineFlow(
@@ -45,7 +48,22 @@ const generateQuizFlow = ai.defineFlow(
     outputSchema: GenerateQuizOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
+    let content = input.text || '';
+
+    if (input.youtubeUrl) {
+      try {
+        content = await getYouTubeTranscript(input.youtubeUrl);
+      } catch (e) {
+        console.error("Failed to get YouTube transcript", e);
+        throw new Error("Could not get transcript for the provided YouTube URL. The video might not have subtitles enabled.");
+      }
+    }
+
+    if (!content) {
+      throw new Error("No content provided to generate a quiz.");
+    }
+
+    const {output} = await prompt({ content });
     return output!;
   }
 );

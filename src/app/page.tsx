@@ -12,7 +12,7 @@ export default function LandingPage() {
             <div className="max-w-3xl mx-auto">
               <BrainCircuit className="mx-auto h-20 w-20 text-primary mb-6" />
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tighter mb-4">
-                Smarter Studying Starts Here
+                StudyWiseAI
               </h1>
               <p className="text-lg md:text-xl text-muted-foreground mb-8">
                 Welcome to StudyWise AI, your personal AI-powered study assistant. Transform any text or topic into clear notes, interactive quizzes, and effective flashcards in seconds.

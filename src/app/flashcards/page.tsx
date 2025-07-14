@@ -1,22 +1,25 @@
+
 'use client';
 
 import { useState, useRef } from 'react';
-import Image from 'next/image';
-import { BrainCircuit, Loader2, Wand2, Layers, BookOpen, Upload, Download } from 'lucide-react';
+import { BrainCircuit, Loader2, Wand2, Layers, BookOpen, Upload, Download, FileType, Youtube } from 'lucide-react';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
-import { generateFlashcards, type GenerateFlashcardsOutput } from '@/ai/flows/generate-flashcards';
-import { generateFromTopic, type GenerateFromTopicOutput } from '@/ai/flows/generate-from-topic';
+import { generateFlashcards, type GenerateFlashcardsOutput, type GenerateFlashcardsInput } from '@/ai/flows/generate-flashcards';
+import { generateFromTopic } from '@/ai/flows/generate-from-topic';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import FlashcardsDisplay from '@/components/app/flashcards-display';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
+import { extractTextFromFile } from '@/lib/file-parser';
 
-type GenerationMode = 'from-text' | 'from-topic';
+type InputMode = 'text' | 'topic' | 'youtube' | 'file';
 
 interface GeneratedContent {
     flashcards: GenerateFlashcardsOutput['flashcards'];
@@ -26,52 +29,64 @@ interface GeneratedContent {
     sourceTopic?: string;
 }
 
+// Extend the jsPDF type to include the autoTable method from the plugin
+interface jsPDFWithAutoTable extends jsPDF {
+  autoTable: (options: any) => jsPDF;
+}
+
 
 export default function FlashcardsPage() {
-  const [generationMode, setGenerationMode] = useState<GenerationMode>('from-text');
+  const [inputMode, setInputMode] = useState<InputMode>('text');
   const [text, setText] = useState('');
   const [topic, setTopic] = useState('');
+  const [youtubeUrl, setYoutubeUrl] = useState('');
   const [generatedContent, setGeneratedContent] = useState<GeneratedContent | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleGenerate = async () => {
-    if (generationMode === 'from-text' && !text.trim()) {
-      toast({
-        variant: 'destructive',
-        title: 'Input Text Required',
-        description: 'Please enter some text to generate flashcards.',
-      });
-      return;
-    }
-
-    if (generationMode === 'from-topic' && !topic.trim()) {
-      toast({
-        variant: 'destructive',
-        title: 'Topic Required',
-        description: 'Please enter a topic to generate flashcards from.',
-      });
-      return;
-    }
-
+    let input: GenerateFlashcardsInput = {};
+    
     setIsLoading(true);
     setGeneratedContent(null);
 
     try {
-      let result: GeneratedContent;
-      if (generationMode === 'from-text') {
-        result = await generateFlashcards({ text });
-      } else { // from-topic
-        const topicResult = await generateFromTopic({ topic });
-        result = { 
-            flashcards: topicResult.flashcards,
-            notes: topicResult.notes,
-            quiz: topicResult.quiz,
-            imageHint: topicResult.imageHint,
-            sourceTopic: topic,
-        };
-      }
+       let result: GeneratedContent;
+
+        if (inputMode === 'topic') {
+            if (!topic.trim()) {
+                toast({ variant: 'destructive', title: 'Topic is required.' });
+                setIsLoading(false);
+                return;
+            }
+            const topicResult = await generateFromTopic({ topic });
+            result = {
+                flashcards: topicResult.flashcards,
+                notes: topicResult.notes,
+                quiz: topicResult.quiz,
+                imageHint: topicResult.imageHint,
+                sourceTopic: topic,
+            };
+        } else {
+             if (inputMode === 'text') {
+                if (!text.trim()) {
+                  toast({ variant: 'destructive', title: 'Text is required.' });
+                  setIsLoading(false);
+                  return;
+                }
+                input.text = text;
+            } else if (inputMode === 'youtube') {
+                if (!youtubeUrl.trim()) {
+                  toast({ variant: 'destructive', title: 'YouTube URL is required.' });
+                  setIsLoading(false);
+                  return;
+                }
+                input.youtubeUrl = youtubeUrl;
+            }
+            result = await generateFlashcards(input);
+        }
+
       setGeneratedContent(result);
     } catch (error) {
       console.error('Error generating content:', error);
@@ -85,52 +100,59 @@ export default function FlashcardsPage() {
     }
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+ const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const content = JSON.parse(e.target?.result as string);
-          setGeneratedContent(content);
-          if (content.sourceTopic) {
-              setTopic(content.sourceTopic);
-              setGenerationMode('from-topic');
-          } else {
-              setGenerationMode('from-text');
-              // Heuristic to set text field, might not be perfect
-              const combinedText = content.flashcards.map((fc: any) => `${fc.question} ${fc.answer}`).join('\n');
-              setText(combinedText);
-          }
-           toast({
-            title: 'Content Loaded',
-            description: 'Your study materials have been imported.',
-          });
-        } catch (error) {
+      try {
+          const extractedText = await extractTextFromFile(file);
+          setText(extractedText);
+          setInputMode('text');
+          setGeneratedContent(null);
           toast({
-            variant: 'destructive',
-            title: 'Import Failed',
-            description: 'The selected file is not a valid StudyWise JSON file.',
+            title: 'File Loaded',
+            description: 'The text from your file has been loaded.',
           });
-        }
-      };
-      reader.readAsText(file);
+      } catch (error) {
+        console.error("File upload error:", error);
+        toast({
+          variant: 'destructive',
+          title: 'Import Failed',
+          description: error instanceof Error ? error.message : 'Could not read the file.',
+        });
+      }
     }
-     // Reset file input
+    // Reset file input
     if (fileInputRef.current) {
-        fileInputRef.current.value = '';
+      fileInputRef.current.value = '';
     }
   };
 
-  const handleFileExport = () => {
-    if (!generatedContent) return;
-    const blob = new Blob([JSON.stringify(generatedContent, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `studywise-flashcards-${generatedContent.sourceTopic || 'custom'}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handlePdfExport = () => {
+    if (!generatedContent?.flashcards) return;
+
+    const doc = new jsPDF() as jsPDFWithAutoTable;
+    const flashcardsTitle = generatedContent.sourceTopic ? `Flashcards: ${generatedContent.sourceTopic}` : 'Flashcards';
+    
+    // Set title
+    doc.setFontSize(20);
+    doc.text(flashcardsTitle, 14, 22);
+
+    // Create table
+    doc.autoTable({
+        startY: 30,
+        head: [['Question', 'Answer']],
+        body: generatedContent.flashcards.map(fc => [fc.question, fc.answer]),
+        theme: 'striped',
+        headStyles: { fillColor: [22, 163, 74] },
+        styles: { font: 'helvetica', fontSize: 10 },
+        columnStyles: {
+            0: { cellWidth: 100 },
+            1: { cellWidth: 'auto' },
+        },
+    });
+
+    const fileName = `studywise-flashcards-${generatedContent.sourceTopic?.replace(/\s+/g, '_') || 'custom'}.pdf`;
+    doc.save(fileName);
   };
 
   const renderContent = () => {
@@ -154,16 +176,7 @@ export default function FlashcardsPage() {
       );
     }
 
-    return (
-        <>
-            {generatedContent.imageHint && (
-                 <div className="mb-6 rounded-lg overflow-hidden aspect-video relative w-full max-w-md mx-auto">
-                    <Image src={`https://placehold.co/600x400.png`} alt="Generated cover image" layout="fill" objectFit="cover" data-ai-hint={generatedContent.imageHint}/>
-                </div>
-            )}
-            <FlashcardsDisplay flashcards={generatedContent.flashcards} />
-        </>
-    );
+    return <FlashcardsDisplay flashcards={generatedContent.flashcards} />;
   };
 
   return (
@@ -180,66 +193,66 @@ export default function FlashcardsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
           <div className="space-y-6">
              <Card>
-              <CardHeader>
-                 <Tabs
-                  value={generationMode}
-                  onValueChange={(value) => setGenerationMode(value as GenerationMode)}
-                  className="w-full"
-                >
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="from-text"><Layers className="mr-2"/>Use my text</TabsTrigger>
-                    <TabsTrigger value="from-topic"><BookOpen className="mr-2"/>From a topic</TabsTrigger>
-                  </TabsList>
+                <Tabs value={inputMode} onValueChange={(v) => setInputMode(v as InputMode)} className="w-full">
+                    <CardHeader>
+                        <TabsList className="grid w-full grid-cols-3">
+                            <TabsTrigger value="text"><Layers className="mr-2"/>Use my text</TabsTrigger>
+                            <TabsTrigger value="topic"><BookOpen className="mr-2"/>From a topic</TabsTrigger>
+                            <TabsTrigger value="youtube"><Youtube className="mr-2"/>From YouTube</TabsTrigger>
+                        </TabsList>
+                    </CardHeader>
+                    <CardContent>
+                        <TabsContent value="text" className="mt-0">
+                             <CardTitle className="mb-2 text-xl">Enter Your Study Material</CardTitle>
+                             <CardDescription className="mb-4">Paste your text or import a document below to get started.</CardDescription>
+                             <Textarea
+                                placeholder="Paste your notes, an article, or any text you want to study..."
+                                className="min-h-[250px] text-base"
+                                value={text}
+                                onChange={(e) => setText(e.target.value)}
+                            />
+                        </TabsContent>
+                        <TabsContent value="topic" className="mt-0">
+                            <CardTitle className="mb-2 text-xl">Generate From Topic</CardTitle>
+                            <CardDescription className="mb-4">Enter a topic and we'll generate the study materials for you.</CardDescription>
+                            <Input
+                                placeholder="e.g., 'The basics of photosynthesis'"
+                                className="text-base h-12"
+                                value={topic}
+                                onChange={(e) => setTopic(e.target.value)}
+                            />
+                        </TabsContent>
+                         <TabsContent value="youtube" className="mt-0">
+                            <CardTitle className="mb-2 text-xl">Generate From YouTube</CardTitle>
+                            <CardDescription className="mb-4">Enter a YouTube video URL and we'll create flashcards from its transcript.</CardDescription>
+                            <Input
+                                type="url"
+                                placeholder="https://www.youtube.com/watch?v=..."
+                                value={youtubeUrl}
+                                onChange={(e) => setYoutubeUrl(e.target.value)}
+                            />
+                        </TabsContent>
+                    </CardContent>
+                    <CardFooter className="flex-col sm:flex-row gap-2">
+                        <Button onClick={handleGenerate} disabled={isLoading} className="w-full" size="lg">
+                            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+                            Generate Flashcards
+                        </Button>
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleFileUpload}
+                            accept=".pdf,.docx,.txt"
+                            className="hidden"
+                        />
+                        <Button onClick={() => fileInputRef.current?.click()} variant="outline" className="w-full sm:w-auto" size="lg" title="Import from file">
+                            <Upload className="h-4 w-4" />
+                        </Button>
+                        <Button onClick={handlePdfExport} disabled={!generatedContent} variant="outline" className="w-full sm:w-auto" size="lg" title="Export to PDF">
+                            <FileType className="h-4 w-4" />
+                        </Button>
+                    </CardFooter>
                 </Tabs>
-              </CardHeader>
-              <CardContent>
-                {generationMode === 'from-text' ? (
-                  <>
-                    <CardTitle className="mb-2 text-xl">Enter Your Study Material</CardTitle>
-                    <CardDescription className="mb-4">Paste your text below to get started.</CardDescription>
-                    <Textarea
-                        placeholder="Paste your notes, an article, or any text you want to study..."
-                        className="min-h-[250px] text-base"
-                        value={text}
-                        onChange={(e) => setText(e.target.value)}
-                    />
-                  </>
-                ) : (
-                    <>
-                    <CardTitle className="mb-2 text-xl">Generate From Topic</CardTitle>
-                    <CardDescription className="mb-4">Enter a topic and we'll generate the study materials for you.</CardDescription>
-                    <Input
-                        placeholder="e.g., 'The basics of photosynthesis'"
-                        className="text-base h-12"
-                        value={topic}
-                        onChange={(e) => setTopic(e.target.value)}
-                    />
-                  </>
-                )}
-              </CardContent>
-               <CardFooter className="flex-col sm:flex-row gap-2">
-                 <Button onClick={handleGenerate} disabled={isLoading} className="w-full" size="lg">
-                  {isLoading ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Wand2 className="mr-2 h-4 w-4" />
-                  )}
-                  Generate Flashcards
-                </Button>
-                <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileUpload}
-                    accept=".json"
-                    className="hidden"
-                />
-                 <Button onClick={() => fileInputRef.current?.click()} variant="outline" className="w-full sm:w-auto" size="lg" title="Import from file">
-                    <Upload className="h-4 w-4" />
-                </Button>
-                <Button onClick={handleFileExport} disabled={!generatedContent} variant="outline" className="w-full sm:w-auto" size="lg" title="Export to file">
-                    <Download className="h-4 w-4" />
-                </Button>
-              </CardFooter>
             </Card>
           </div>
 

@@ -1,37 +1,80 @@
 'use client';
 
-import { useState } from 'react';
-import Image from 'next/image';
-import { BrainCircuit, Loader2, Wand2, MessageCircleQuestion } from 'lucide-react';
-import { explainLikeImFive, type ExplainLikeImFiveOutput } from '@/ai/flows/eli5';
+import { useState, useRef } from 'react';
+import { BrainCircuit, Loader2, Wand2, MessageCircleQuestion, FileText, Upload, Youtube } from 'lucide-react';
+import { explainLikeImFive, type ExplainLikeImFiveOutput, type ExplainLikeImFiveInput } from '@/ai/flows/eli5';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import NotesDisplay from '@/components/app/notes-display';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
+
+type Difficulty = 'easy' | 'medium' | 'hard';
+type InputMode = 'text' | 'image' | 'youtube';
+
+const fileToDataURL = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = error => reject(error);
+        reader.readAsDataURL(file);
+    });
+};
 
 export default function Eli5Page() {
-  const [topic, setTopic] = useState('');
+  const [inputText, setInputText] = useState('');
+  const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [difficulty, setDifficulty] = useState<Difficulty>('easy');
+  const [inputMode, setInputMode] = useState<InputMode>('text');
+  
   const [generatedContent, setGeneratedContent] = useState<ExplainLikeImFiveOutput | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleGenerate = async () => {
-    if (!topic.trim()) {
-      toast({
-        variant: 'destructive',
-        title: 'Topic Required',
-        description: 'Please enter a topic to explain.',
-      });
-      return;
+    let input: ExplainLikeImFiveInput = { difficulty };
+    
+    switch (inputMode) {
+      case 'text':
+        if (!inputText.trim()) {
+          toast({ variant: 'destructive', title: 'Text is required.' });
+          return;
+        }
+        input.text = inputText;
+        break;
+      case 'youtube':
+        if (!youtubeUrl.trim()) {
+          toast({ variant: 'destructive', title: 'YouTube URL is required.' });
+          return;
+        }
+        input.youtubeUrl = youtubeUrl;
+        break;
+      case 'image':
+        const file = fileInputRef.current?.files?.[0];
+        if (!file) {
+          toast({ variant: 'destructive', title: 'An image file is required.' });
+          return;
+        }
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+          toast({ variant: 'destructive', title: 'Unsupported file type. Please upload a PNG or JPG.' });
+          return;
+        }
+        input.imageDataUri = await fileToDataURL(file);
+        break;
     }
+
 
     setIsLoading(true);
     setGeneratedContent(null);
 
     try {
-      const result = await explainLikeImFive({ topic });
+      const result = await explainLikeImFive(input);
       setGeneratedContent(result);
     } catch (error) {
       console.error('Error generating explanation:', error);
@@ -49,7 +92,6 @@ export default function Eli5Page() {
     if (isLoading) {
       return (
         <div className="p-6 space-y-4">
-          <Skeleton className="h-48 w-full" />
           <Skeleton className="h-8 w-1/3" />
           <Skeleton className="h-4 w-full" />
           <Skeleton className="h-4 w-full" />
@@ -62,24 +104,15 @@ export default function Eli5Page() {
       return (
         <div className="flex flex-col items-center justify-center h-full text-center p-8">
           <BrainCircuit className="h-16 w-16 text-muted-foreground/50 mb-4" />
-          <h3 className="text-lg font-semibold">A simple explanation will appear here</h3>
+          <h3 className="text-lg font-semibold">Your explanation will appear here</h3>
           <p className="text-sm text-muted-foreground">
-            Enter a topic to get started.
+            Provide some content and select a difficulty to get started.
           </p>
         </div>
       );
     }
 
-    return (
-      <>
-        {generatedContent.imageHint && (
-          <div className="mb-6 rounded-lg overflow-hidden aspect-video relative">
-            <Image src={`https://placehold.co/600x400.png`} alt="Generated illustration" layout="fill" objectFit="cover" data-ai-hint={generatedContent.imageHint}/>
-          </div>
-        )}
-        <NotesDisplay notes={generatedContent.explanation} />
-      </>
-    );
+    return <NotesDisplay notes={generatedContent.explanation} onPlayAudio={() => {}} isSynthesizing={null} />;
   };
 
   return (
@@ -89,42 +122,85 @@ export default function Eli5Page() {
           <MessageCircleQuestion className="h-6 w-6 text-primary" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Explain Like I'm 5</h1>
-          <p className="text-muted-foreground">Get a super simple explanation for any topic.</p>
+          <h1 className="text-2xl font-bold tracking-tight">Concept Explainer</h1>
+          <p className="text-muted-foreground">Get a tailored explanation for any topic from any source.</p>
         </div>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
         <div className="space-y-6">
           <Card>
-            <CardHeader>
-              <CardTitle className="mb-2 text-xl">What do you want to understand?</CardTitle>
-              <CardDescription className="mb-4">Enter a topic and we'll break it down for you in the simplest terms.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Input
-                placeholder="e.g., 'Quantum computing' or 'Black holes'"
-                className="text-base h-12"
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-              />
-            </CardContent>
-            <CardFooter>
-              <Button onClick={handleGenerate} disabled={isLoading} className="w-full" size="lg">
-                {isLoading ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Wand2 className="mr-2 h-4 w-4" />
-                )}
-                Explain Topic
-              </Button>
-            </CardFooter>
+            <Tabs
+              value={inputMode}
+              onValueChange={(value) => setInputMode(value as InputMode)}
+              className="w-full"
+            >
+              <CardHeader>
+                <CardTitle className="mb-2 text-xl">What do you want to understand?</CardTitle>
+                <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="text"><FileText className="mr-2" />Text</TabsTrigger>
+                    <TabsTrigger value="image"><Upload className="mr-2" />Image</TabsTrigger>
+                    <TabsTrigger value="youtube"><Youtube className="mr-2" />YouTube</TabsTrigger>
+                </TabsList>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                 <TabsContent value="text" className="mt-0">
+                    <Textarea
+                        placeholder="Paste text here to explain..."
+                        value={inputText}
+                        onChange={(e) => setInputText(e.target.value)}
+                        className="min-h-[200px]"
+                    />
+                </TabsContent>
+                <TabsContent value="image" className="mt-0">
+                    <Input
+                        type="file"
+                        ref={fileInputRef}
+                        accept="image/png, image/jpeg, image/webp"
+                    />
+                    <p className="text-xs text-muted-foreground mt-2">Upload an image containing text to explain.</p>
+                </TabsContent>
+                <TabsContent value="youtube" className="mt-0">
+                    <Input
+                        type="url"
+                        placeholder="https://www.youtube.com/watch?v=..."
+                        value={youtubeUrl}
+                        onChange={(e) => setYoutubeUrl(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground mt-2">Enter a YouTube video URL to explain its content.</p>
+                </TabsContent>
+
+                <div>
+                  <Label htmlFor="difficulty-select">Difficulty</Label>
+                    <Select value={difficulty} onValueChange={(value: Difficulty) => setDifficulty(value)}>
+                      <SelectTrigger id="difficulty-select" className="h-12 mt-1">
+                        <SelectValue placeholder="Select difficulty" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="easy">Easy (Explain Like I'm 5)</SelectItem>
+                        <SelectItem value="medium">Medium (High School)</SelectItem>
+                        <SelectItem value="hard">Hard (College Level)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                </div>
+              </CardContent>
+              <CardFooter>
+                <Button onClick={handleGenerate} disabled={isLoading} className="w-full" size="lg">
+                  {isLoading ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Wand2 className="mr-2 h-4 w-4" />
+                  )}
+                  Explain Topic
+                </Button>
+              </CardFooter>
+            </Tabs>
           </Card>
         </div>
 
         <Card className="lg:sticky top-24 min-h-[400px] lg:min-h-[600px] flex flex-col">
           <CardHeader>
-            <CardTitle>Simple Explanation</CardTitle>
-            <CardDescription>Here's the topic, simplified.</CardDescription>
+            <CardTitle>Generated Explanation</CardTitle>
+            <CardDescription>Here's the topic, explained for you.</CardDescription>
           </CardHeader>
           <CardContent className="flex-1">
             {renderContent()}

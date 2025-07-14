@@ -10,10 +10,12 @@
  */
 
 import {ai} from '@/ai/genkit';
+import { getYouTubeTranscript } from '@/services/youtube';
 import {z} from 'genkit';
 
 const GenerateFlashcardsInputSchema = z.object({
-  text: z.string().describe('The text to generate flashcards from.'),
+  text: z.string().optional().describe('The text to generate flashcards from.'),
+  youtubeUrl: z.string().optional().describe('A YouTube video URL to generate flashcards from.'),
 });
 
 export type GenerateFlashcardsInput = z.infer<typeof GenerateFlashcardsInputSchema>;
@@ -23,6 +25,8 @@ const GenerateFlashcardsOutputSchema = z.object({
     z.object({
       question: z.string().describe('The flashcard question.'),
       answer: z.string().describe('The flashcard answer.'),
+      emoji: z.string().describe('A single, valid emoji character relevant to the flashcard content. Example: "🧠"'),
+      color: z.string().describe('A hex color code for the flashcard background (e.g., #FFFFFF).'),
     })
   ).describe('The generated flashcards.'),
 });
@@ -35,28 +39,19 @@ export async function generateFlashcards(input: GenerateFlashcardsInput): Promis
 
 const prompt = ai.definePrompt({
   name: 'generateFlashcardsPrompt',
-  input: {schema: GenerateFlashcardsInputSchema},
+  input: {schema: z.object({ content: z.string() }) },
   output: {schema: GenerateFlashcardsOutputSchema},
   prompt: `You are an expert at creating flashcards for students.
 
-  Given the following text, generate a set of flashcards with questions and answers.
+  Given the following content, generate a set of flashcards. For each flashcard, provide:
+  1. A "question".
+  2. A concise "answer".
+  3. A single, valid "emoji" character that is thematically related to the content.
+  4. A "color" as a hex code that is visually appealing for a background. Ensure good contrast for dark text.
 
-  Text: {{{text}}}
+  Content: {{{content}}}
 
-  Format the flashcards as a JSON array of objects, where each object has a "question" and "answer" field.
-  Do not include any other text in your response, only the JSON array.
-
-  Example:
-  [
-    {
-      "question": "What is the capital of France?",
-      "answer": "Paris"
-    },
-    {
-      "question": "What is the highest mountain in the world?",
-      "answer": "Mount Everest"
-    }
-  ]
+  Format the output as a JSON array of objects. Do not include any other text in your response, only the JSON array.
   `,
 });
 
@@ -67,7 +62,22 @@ const generateFlashcardsFlow = ai.defineFlow(
     outputSchema: GenerateFlashcardsOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
+    let content = input.text || '';
+    
+    if (input.youtubeUrl) {
+        try {
+            content = await getYouTubeTranscript(input.youtubeUrl);
+        } catch (e) {
+            console.error("Failed to get YouTube transcript", e);
+            throw new Error("Could not get transcript for the provided YouTube URL. The video might not have subtitles enabled.");
+        }
+    }
+
+    if (!content) {
+        throw new Error("No content provided to generate flashcards.");
+    }
+    
+    const {output} = await prompt({ content });
     return output!;
   }
 );

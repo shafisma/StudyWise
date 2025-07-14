@@ -20,6 +20,7 @@ const QuizQuestionSchema = z.object({
     question: z.string().describe('The question.'),
     options: z.array(z.string()).describe('An array of 4 multiple choice options.'),
     answer: z.string().describe('The correct answer. Must be one of the options.'),
+    emoji: z.string().optional().describe('A single emoji related to the question.'),
 });
 
 const GenerateFromTopicOutputSchema = z.object({
@@ -31,6 +32,8 @@ const GenerateFromTopicOutputSchema = z.object({
     z.object({
       question: z.string().describe('The flashcard question.'),
       answer: z.string().describe('The flashcard answer.'),
+      emoji: z.string().describe('A single, valid emoji character relevant to the flashcard content. Example: "🧠"'),
+      color: z.string().describe('A hex color code for the flashcard background (e.g., #FFFFFF).'),
     })
   ).describe('The generated flashcards.'),
   imageHint: z.string().optional().describe('A one or two word hint for a relevant image search query.'),
@@ -49,8 +52,8 @@ const generateContentPrompt = ai.definePrompt({
 
 The study materials should include:
 1.  **Notes**: A summary of the key concepts, definitions, and important points about the topic. Format this as markdown.
-2.  **Quiz**: A multiple-choice quiz with 5 questions to test understanding. Each question should have 4 options and a correct answer.
-3.  **Flashcards**: A set of 5-10 flashcards with a clear question and a concise answer for key terms and concepts.
+2.  **Quiz**: A multiple-choice quiz with 5 questions to test understanding. Each question should have 4 options, a correct answer, and a single relevant emoji.
+3.  **Flashcards**: A set of 5-10 flashcards. For each flashcard, provide a clear "question", a concise "answer", a single, valid "emoji" character, and a "color" as a hex code.
 4.  **Image Hint**: A 1-2 word hint for a web search for a cover image for these study materials. For example, for "The basics of photosynthesis" you could provide "photosynthesis basics".
 
 Topic: {{{topic}}}

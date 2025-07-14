@@ -1,68 +1,96 @@
+
 'use client';
 
 import { useState, useRef } from 'react';
-import Image from 'next/image';
-import { BrainCircuit, Loader2, Wand2, FileQuestion, BookOpen, Upload, Download } from 'lucide-react';
+import { BrainCircuit, Loader2, Wand2, FileQuestion, BookOpen, Upload, Download, FileType, Youtube } from 'lucide-react';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
-import { generateQuiz, type GenerateQuizOutput } from '@/ai/flows/generate-quiz';
-import { generateFromTopic, type GenerateFromTopicOutput } from '@/ai/flows/generate-from-topic';
+import { generateQuiz, type GenerateQuizOutput, type GenerateQuizInput } from '@/ai/flows/generate-quiz';
+import { generateFromTopic } from '@/ai/flows/generate-from-topic';
+import { textToSpeech } from '@/ai/flows/text-to-speech';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import QuizDisplay from '@/components/app/quiz-display';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
+import { extractTextFromFile } from '@/lib/file-parser';
+import AudioPlayer from '@/components/app/audio-player';
+import { differenceInCalendarDays } from 'date-fns';
 
-type GenerationMode = 'from-text' | 'from-topic';
+type InputMode = 'from-text' | 'from-topic' | 'from-youtube';
+
+interface Question {
+  question: string;
+  options: string[];
+  answer: string;
+  emoji?: string;
+}
 
 interface GeneratedContent {
     notes?: string;
-    quiz: { questions: GenerateQuizOutput['questions'] };
+    quiz: { questions: Question[] };
     flashcards?: any[];
     imageHint?: string;
     sourceTopic?: string;
 }
 
+// Extend the jsPDF type to include the autoTable method from the plugin
+interface jsPDFWithAutoTable extends jsPDF {
+  autoTable: (options: any) => jsPDF;
+}
+
+
 export default function QuizPage() {
-  const [generationMode, setGenerationMode] = useState<GenerationMode>('from-text');
+  const [inputMode, setInputMode] = useState<InputMode>('from-text');
   const [text, setText] = useState('');
   const [topic, setTopic] = useState('');
+  const [youtubeUrl, setYoutubeUrl] = useState('');
   const [generatedContent, setGeneratedContent] = useState<GeneratedContent | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [audioSrc, setAudioSrc] = useState<string | null>(null);
+  const [isSynthesizing, setIsSynthesizing] = useState<string | null>(null);
+
+  const handlePlayAudio = async (textToPlay: string, id: string) => {
+      if (isSynthesizing === id) return;
+      
+      setIsSynthesizing(id);
+      setAudioSrc(null);
+
+      try {
+          const { audioDataUri } = await textToSpeech({ text: textToPlay });
+          setAudioSrc(audioDataUri);
+      } catch (error) {
+          console.error("Error synthesizing speech:", error);
+          toast({
+              variant: 'destructive',
+              title: 'Audio Failed',
+              description: 'Could not generate audio for this question.',
+          });
+      } finally {
+          setIsSynthesizing(null);
+      }
+  };
+
   const handleGenerate = async () => {
-    if (generationMode === 'from-text' && !text.trim()) {
-      toast({
-        variant: 'destructive',
-        title: 'Input Text Required',
-        description: 'Please enter some text to generate a quiz.',
-      });
-      return;
-    }
-
-    if (generationMode === 'from-topic' && !topic.trim()) {
-      toast({
-        variant: 'destructive',
-        title: 'Topic Required',
-        description: 'Please enter a topic to generate a quiz from.',
-      });
-      return;
-    }
-
     setIsLoading(true);
     setGeneratedContent(null);
 
     try {
       let result: GeneratedContent;
-      if (generationMode === 'from-text') {
-        const textResult = await generateQuiz({ text });
-        result = { quiz: { questions: textResult.questions } }
-      } else { // from-topic
+      if (inputMode === 'from-topic') {
+        if (!topic.trim()) {
+            toast({ variant: 'destructive', title: 'Topic is required.' });
+            setIsLoading(false);
+            return;
+        }
         const topicResult = await generateFromTopic({ topic });
         if (topicResult.quiz && topicResult.quiz.questions) {
            result = { 
@@ -75,6 +103,25 @@ export default function QuizPage() {
         } else {
           throw new Error("Quiz could not be generated from the topic.");
         }
+      } else { // from-text or from-youtube
+        let quizInput: GenerateQuizInput = {};
+        if (inputMode === 'from-text') {
+            if (!text.trim()) {
+                toast({ variant: 'destructive', title: 'Text is required.' });
+                setIsLoading(false);
+                return;
+            }
+            quizInput.text = text;
+        } else if (inputMode === 'from-youtube') {
+            if (!youtubeUrl.trim()) {
+                toast({ variant: 'destructive', title: 'YouTube URL is required.' });
+                setIsLoading(false);
+                return;
+            }
+            quizInput.youtubeUrl = youtubeUrl;
+        }
+        const textResult = await generateQuiz(quizInput);
+        result = { quiz: { questions: textResult.questions } }
       }
       setGeneratedContent(result);
     } catch (error) {
@@ -89,65 +136,110 @@ export default function QuizPage() {
     }
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const content = JSON.parse(e.target?.result as string);
-           if (!content.quiz || !content.quiz.questions) {
-            throw new Error("Invalid file format: missing quiz data.");
-          }
-          setGeneratedContent(content);
-          if (content.sourceTopic) {
-              setTopic(content.sourceTopic);
-              setGenerationMode('from-topic');
-          } else {
-              setGenerationMode('from-text');
-              const combinedText = content.quiz.questions.map((q: any) => `${q.question} ${q.options.join(' ')}`).join('\n');
-              setText(combinedText);
-          }
+      try {
+           const extractedText = await extractTextFromFile(file);
+           setText(extractedText);
+           setInputMode('from-text');
+           setGeneratedContent(null);
            toast({
-            title: 'Content Loaded',
-            description: 'Your study materials have been imported.',
+            title: 'File Loaded',
+            description: 'The text from your file has been loaded.',
           });
-        } catch (error) {
-          toast({
-            variant: 'destructive',
-            title: 'Import Failed',
-            description: 'The selected file is not a valid StudyWise JSON file.',
-          });
-        }
-      };
-      reader.readAsText(file);
+      } catch (error) {
+        console.error("File upload error:", error);
+        toast({
+          variant: 'destructive',
+          title: 'Import Failed',
+          description: error instanceof Error ? error.message : 'Could not read the file.',
+        });
+      }
     }
     if (fileInputRef.current) {
         fileInputRef.current.value = '';
     }
   };
 
-  const handleFileExport = () => {
-    if (!generatedContent) return;
-    const blob = new Blob([JSON.stringify(generatedContent, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `studywise-quiz-${generatedContent.sourceTopic || 'custom'}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handlePdfExport = () => {
+    if (!generatedContent?.quiz?.questions) return;
+    
+    const doc = new jsPDF() as jsPDFWithAutoTable;
+    const quizTitle = generatedContent.sourceTopic ? `Quiz: ${generatedContent.sourceTopic}` : 'Quiz';
+
+    // Set title
+    doc.setFontSize(20);
+    doc.text(quizTitle, 14, 22);
+
+    // Create table
+    doc.autoTable({
+        startY: 30,
+        head: [['Question', 'Answer']],
+        body: generatedContent.quiz.questions.map(q => [q.question, q.answer]),
+        theme: 'striped',
+        headStyles: { fillColor: [22, 163, 74] },
+        styles: { font: 'helvetica', fontSize: 10 },
+        columnStyles: {
+            0: { cellWidth: 100 },
+            1: { cellWidth: 'auto' },
+        },
+    });
+
+    const fileName = `studywise-quiz-${generatedContent.sourceTopic?.replace(/\\s+/g, '_') || 'custom'}.pdf`;
+    doc.save(fileName);
   };
   
   const saveQuizResult = (score: number, totalQuestions: number) => {
+    let resultTopic = 'Custom Content';
+    if(inputMode === 'from-topic') resultTopic = topic;
+    if(inputMode === 'from-youtube') resultTopic = 'YouTube Video';
+    
     const result = {
-      topic: generationMode === 'from-topic' ? topic : 'Custom Text',
+      type: 'quiz',
+      topic: resultTopic,
       score,
-      totalQuestions,
+      total: totalQuestions,
       date: new Date().toISOString(),
     };
-    const history = JSON.parse(localStorage.getItem('quizHistory') || '[]');
+    const history = JSON.parse(localStorage.getItem('activityHistory') || '[]');
     history.push(result);
-    localStorage.setItem('quizHistory', JSON.stringify(history));
+    localStorage.setItem('activityHistory', JSON.stringify(history));
+
+    // Update gamification stats
+    const stats = JSON.parse(localStorage.getItem('gamificationStats') || '{"xp":0, "streak":0, "longestStreak":0, "lastActivityDate": null}');
+    
+    // Add XP
+    stats.xp += score * 10;
+
+    // Update streak
+    const today = new Date();
+    const lastActivityDate = stats.lastActivityDate ? new Date(stats.lastActivityDate) : null;
+    
+    if (lastActivityDate) {
+        const diffDays = differenceInCalendarDays(today, lastActivityDate);
+        if (diffDays === 1) {
+            stats.streak++; // Continue streak
+        } else if (diffDays > 1) {
+            stats.streak = 1; // Reset streak
+        }
+        // If diffDays is 0, do nothing, it's the same day.
+    } else {
+        stats.streak = 1; // First activity
+    }
+
+    if (stats.streak > stats.longestStreak) {
+        stats.longestStreak = stats.streak;
+    }
+
+    stats.lastActivityDate = today.toISOString();
+    
+    localStorage.setItem('gamificationStats', JSON.stringify(stats));
+
+    toast({
+        title: `+${score * 10} XP`,
+        description: "Your progress has been saved!",
+    });
   }
 
 
@@ -177,14 +269,12 @@ export default function QuizPage() {
     }
 
     return (
-        <>
-            {generatedContent.imageHint && (
-                <div className="mb-6 rounded-lg overflow-hidden aspect-video relative">
-                    <Image src={`https://placehold.co/600x400.png`} alt="Generated cover image" layout="fill" objectFit="cover" data-ai-hint={generatedContent.imageHint}/>
-                </div>
-            )}
-            <QuizDisplay questions={generatedContent.quiz.questions} onQuizSubmit={saveQuizResult} />
-        </>
+        <QuizDisplay 
+            questions={generatedContent.quiz.questions} 
+            onQuizSubmit={saveQuizResult}
+            onPlayAudio={handlePlayAudio}
+            isSynthesizing={isSynthesizing}
+        />
     );
   };
 
@@ -201,68 +291,69 @@ export default function QuizPage() {
       </div>
        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
           <div className="space-y-6">
-             <Card>
-              <CardHeader>
-                 <Tabs
-                  value={generationMode}
-                  onValueChange={(value) => setGenerationMode(value as GenerationMode)}
-                  className="w-full"
-                >
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="from-text"><FileQuestion className="mr-2"/>Use my text</TabsTrigger>
-                    <TabsTrigger value="from-topic"><BookOpen className="mr-2"/>From a topic</TabsTrigger>
-                  </TabsList>
+            <Card>
+                <Tabs value={inputMode} onValueChange={(v) => setInputMode(v as InputMode)} className="w-full">
+                    <CardHeader>
+                        <TabsList className="grid w-full grid-cols-3">
+                            <TabsTrigger value="from-text"><FileQuestion className="mr-2"/>Use my text</TabsTrigger>
+                            <TabsTrigger value="from-topic"><BookOpen className="mr-2"/>From a topic</TabsTrigger>
+                            <TabsTrigger value="from-youtube"><Youtube className="mr-2"/>From YouTube</TabsTrigger>
+                        </TabsList>
+                    </CardHeader>
+                    <CardContent>
+                        <TabsContent value="from-text">
+                             <CardTitle className="mb-2 text-xl">Enter Your Study Material</CardTitle>
+                             <CardDescription className="mb-4">Paste your text or import a document below to get started.</CardDescription>
+                             <Textarea
+                                placeholder="Paste your notes, an article, or any text you want to study..."
+                                className="min-h-[250px] text-base"
+                                value={text}
+                                onChange={(e) => setText(e.target.value)}
+                            />
+                        </TabsContent>
+                         <TabsContent value="from-topic">
+                            <CardTitle className="mb-2 text-xl">Generate From Topic</CardTitle>
+                            <CardDescription className="mb-4">Enter a topic and we'll generate the study materials for you.</CardDescription>
+                            <Input
+                                placeholder="e.g., 'The basics of photosynthesis'"
+                                className="text-base h-12"
+                                value={topic}
+                                onChange={(e) => setTopic(e.target.value)}
+                            />
+                        </TabsContent>
+                        <TabsContent value="from-youtube">
+                             <CardTitle className="mb-2 text-xl">Generate From YouTube</CardTitle>
+                             <CardDescription className="mb-4">Enter a video URL and we'll make a quiz from its transcript.</CardDescription>
+                             <Input
+                                type="url"
+                                placeholder="https://www.youtube.com/watch?v=..."
+                                value={youtubeUrl}
+                                onChange={(e) => setYoutubeUrl(e.target.value)}
+                            />
+                        </TabsContent>
+                    </CardContent>
+                    <CardFooter className="flex-col sm:flex-row gap-2">
+                        <Button onClick={handleGenerate} disabled={isLoading} className="w-full" size="lg">
+                            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+                            Generate Quiz
+                        </Button>
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleFileUpload}
+                            accept=".pdf,.docx,.txt"
+                            className="hidden"
+                        />
+                        <Button onClick={() => fileInputRef.current?.click()} variant="outline" className="w-full sm:w-auto" size="lg" title="Import from file">
+                            <Upload className="h-4 w-4" />
+                        </Button>
+                        <Button onClick={handlePdfExport} disabled={!generatedContent} variant="outline" className="w-full sm:w-auto" size="lg" title="Export to PDF">
+                            <FileType className="h-4 w-4" />
+                        </Button>
+                    </CardFooter>
                 </Tabs>
-              </CardHeader>
-              <CardContent>
-                {generationMode === 'from-text' ? (
-                  <>
-                    <CardTitle className="mb-2 text-xl">Enter Your Study Material</CardTitle>
-                    <CardDescription className="mb-4">Paste your text below to get started.</CardDescription>
-                    <Textarea
-                        placeholder="Paste your notes, an article, or any text you want to study..."
-                        className="min-h-[250px] text-base"
-                        value={text}
-                        onChange={(e) => setText(e.target.value)}
-                    />
-                  </>
-                ) : (
-                    <>
-                    <CardTitle className="mb-2 text-xl">Generate From Topic</CardTitle>
-                    <CardDescription className="mb-4">Enter a topic and we'll generate the study materials for you.</CardDescription>
-                    <Input
-                        placeholder="e.g., 'The basics of photosynthesis'"
-                        className="text-base h-12"
-                        value={topic}
-                        onChange={(e) => setTopic(e.target.value)}
-                    />
-                  </>
-                )}
-              </CardContent>
-               <CardFooter className="flex-col sm:flex-row gap-2">
-                 <Button onClick={handleGenerate} disabled={isLoading} className="w-full" size="lg">
-                  {isLoading ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Wand2 className="mr-2 h-4 w-4" />
-                  )}
-                  Generate Quiz
-                </Button>
-                 <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileUpload}
-                    accept=".json"
-                    className="hidden"
-                />
-                 <Button onClick={() => fileInputRef.current?.click()} variant="outline" className="w-full sm:w-auto" size="lg" title="Import from file">
-                    <Upload className="h-4 w-4" />
-                </Button>
-                <Button onClick={handleFileExport} disabled={!generatedContent} variant="outline" className="w-full sm:w-auto" size="lg" title="Export to file">
-                    <Download className="h-4 w-4" />
-                </Button>
-              </CardFooter>
             </Card>
+            <AudioPlayer src={audioSrc} onEnded={() => setAudioSrc(null)} />
           </div>
 
           <Card className="lg:sticky top-24 min-h-[400px] lg:min-h-[600px] flex flex-col">

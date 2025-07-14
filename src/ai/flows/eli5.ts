@@ -1,9 +1,9 @@
 'use server';
 
 /**
- * @fileOverview Explains a topic in simple terms.
+ * @fileOverview Explains a topic in simple terms from various sources.
  *
- * - explainLikeImFive - A function that explains a topic simply.
+ * - explainLikeImFive - A function that explains content simply.
  * - ExplainLikeImFiveInput - The input type for the function.
  * - ExplainLikeImFiveOutput - The return type for the function.
  */
@@ -12,7 +12,15 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const ExplainLikeImFiveInputSchema = z.object({
-  topic: z.string().describe('The topic to explain.'),
+  text: z.string().optional().describe('The text content to explain.'),
+  imageDataUri: z
+    .string()
+    .optional()
+    .describe(
+      "An image for OCR analysis, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'"
+    ),
+  youtubeUrl: z.string().optional().describe('A YouTube video URL to summarize and explain.'),
+  difficulty: z.enum(['easy', 'medium', 'hard']).default('easy').describe("The difficulty level for the explanation. 'easy' is for a 5-year-old.")
 });
 export type ExplainLikeImFiveInput = z.infer<typeof ExplainLikeImFiveInputSchema>;
 
@@ -32,11 +40,16 @@ const generateContentPrompt = ai.definePrompt({
     output: { schema: ExplainLikeImFiveOutputSchema },
     prompt: `You are an expert at explaining complex topics in a simple and easy-to-understand way.
     
-    Your task is to:
-    1. Explain the following topic as if you were talking to a 5-year-old. Use simple words, short sentences, and relatable analogies. Format the output as markdown.
-    2. Provide a 1-2 word hint for an image search that would create a cute, simple, and friendly illustration for a 5-year-old that visually represents the topic. For example, for "Black holes" you could provide "black hole".
+    Your task is to analyze the provided content and:
+    1. Explain it based on the requested difficulty level. Use simple words, short sentences, and relatable analogies for 'easy'. For 'medium', assume a high school level of understanding. For 'hard', assume a college level. Format the output as markdown.
+    2. Provide a 1-2 word hint for an image search that would create a relevant illustration for the topic.
 
-    Topic: {{{topic}}}
+    Content to Explain:
+    {{#if text}}Text: {{{text}}}{{/if}}
+    {{#if imageDataUri}}{{media url=imageDataUri}}{{/if}}
+    {{#if youtubeUrl}}YouTube URL (imagine you have summarized it): {{{youtubeUrl}}}{{/if}}
+
+    Difficulty: {{{difficulty}}}
     `,
 });
 

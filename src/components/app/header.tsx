@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -8,25 +9,33 @@ import {
   FileQuestion,
   Layers,
   BrainCircuit,
-  History,
+  TrendingUp,
   MessageCircleQuestion,
   Menu,
   X,
+  ClipboardCheck,
+  Share2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Sheet,
   SheetContent,
+  SheetHeader,
   SheetTrigger,
+  SheetTitle,
+  SheetDescription,
 } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
+import { UserButton } from "@clerk/nextjs";
 
 const navItems = [
   { href: '/notes', icon: FileText, label: 'Notes' },
   { href: '/quiz', icon: FileQuestion, label: 'Quiz' },
   { href: '/flashcards', icon: Layers, label: 'Flashcards' },
-  { href: '/eli5', icon: MessageCircleQuestion, label: 'ELI5' },
-  { href: '/history', icon: History, label: 'History' },
+  { href: '/eli5', icon: MessageCircleQuestion, label: 'Explainer' },
+  { href: '/exam', icon: ClipboardCheck, label: 'Exam' },
+  { href: '/concept-map', icon: Share2, label: 'Concept Map'},
+  { href: '/progress', icon: TrendingUp, label: 'Progress' },
 ];
 
 export default function AppHeader() {
@@ -71,7 +80,8 @@ export default function AppHeader() {
           </nav>
         </div>
 
-        <div className="flex flex-1 items-center justify-end">
+        <div className="flex flex-1 items-center justify-end gap-4">
+            <UserButton afterSignOutUrl="/"/>
             <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
               <SheetTrigger asChild>
                 <Button
@@ -83,7 +93,11 @@ export default function AppHeader() {
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="pr-0">
-                 <Link href="/" className="flex items-center gap-2 mb-4">
+                 <SheetHeader>
+                    <SheetTitle className="sr-only">Menu</SheetTitle>
+                    <SheetDescription className="sr-only">Main navigation menu</SheetDescription>
+                  </SheetHeader>
+                 <Link href="/" className="flex items-center gap-2 mb-4" onClick={() => setIsMobileMenuOpen(false)}>
                     <BrainCircuit className="h-6 w-6 text-primary" />
                     <span className="font-bold">StudyWise</span>
                 </Link>

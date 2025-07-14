@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type FC } from 'react';
-import { Check, X, ChevronsRight, Award, History, ArrowLeft } from 'lucide-react';
+import { Check, X, ChevronsRight, Award, History, ArrowLeft, Volume2, Loader2 } from 'lucide-react';
 import {
   Carousel,
   CarouselApi,
@@ -22,14 +22,17 @@ interface Question {
   question: string;
   options: string[];
   answer: string;
+  emoji?: string;
 }
 
 interface QuizDisplayProps {
   questions: Question[];
   onQuizSubmit: (score: number, totalQuestions: number) => void;
+  onPlayAudio: (text: string, id: string) => void;
+  isSynthesizing: string | null;
 }
 
-const QuizDisplay: FC<QuizDisplayProps> = ({ questions, onQuizSubmit }) => {
+const QuizDisplay: FC<QuizDisplayProps> = ({ questions, onQuizSubmit, onPlayAudio, isSynthesizing }) => {
   const [selectedAnswers, setSelectedAnswers] = useState<(string | undefined)[]>(Array(questions.length).fill(undefined));
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isReviewing, setIsReviewing] = useState(false);
@@ -120,7 +123,28 @@ const QuizDisplay: FC<QuizDisplayProps> = ({ questions, onQuizSubmit }) => {
             <CarouselItem key={i}>
               <Card>
                 <CardHeader>
-                  <CardTitle>{i + 1}. {q.question}</CardTitle>
+                  <CardTitle>
+                    <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                            {q.emoji && <span className="text-2xl mt-1">{q.emoji}</span>}
+                            <span>{i + 1}. {q.question}</span>
+                        </div>
+                         <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 flex-shrink-0"
+                            onClick={() => onPlayAudio(q.question, `question-${i}`)}
+                            disabled={isSynthesizing === `question-${i}`}
+                            title="Read question aloud"
+                          >
+                            {isSynthesizing === `question-${i}` ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                <Volume2 className="h-4 w-4" />
+                            )}
+                          </Button>
+                    </div>
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <RadioGroup
