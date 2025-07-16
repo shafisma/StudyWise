@@ -1,28 +1,47 @@
+// src/services/youtube.ts
 'use server';
+
+import TranscriptClient from 'youtube-transcript-api';
+
 /**
- * @fileOverview A service for interacting with the YouTube API.
- * 
- * - getYouTubeTranscript - Fetches the transcript for a given YouTube video URL.
+ * Extracts the YouTube video ID from a URL.
+ * @param url A YouTube watch URL or direct ID.
+ * @returns The video ID.
+ * @throws If no ID is found.
  */
+function extractVideoId(url: string): string {
+  const match = url.match(/(?:v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  if (!match) throw new Error(`Invalid YouTube URL or ID: ${url}`);
+  return match[1];
+}
 
-import { YoutubeTranscript } from 'youtube-transcript';
+let client: TranscriptClient | null = null;
 
 /**
- * Fetches the transcript for a given YouTube video URL.
- * @param url The URL of the YouTube video.
- * @returns A promise that resolves to the full transcript text.
- * @throws An error if the transcript cannot be fetched.
+ * Fetches the transcript text for a YouTube video.
+ * @param url YouTube video URL or ID.
+ * @returns Full transcript text, or an empty string if unavailable.
  */
 export async function getYouTubeTranscript(url: string): Promise<string> {
-    try {
-        const transcript = await YoutubeTranscript.fetchTranscript(url);
-        if (!transcript || transcript.length === 0) {
-            throw new Error('No transcript found for this video.');
-        }
-        // Combine all parts of the transcript into a single string
-        return transcript.map(item => item.text).join(' ');
-    } catch (error) {
-        console.error(`Failed to fetch transcript for URL: ${url}`, error);
-        throw new Error('Could not retrieve transcript. The video may not have subtitles enabled or the URL may be invalid.');
+  const videoId = extractVideoId(url);
+
+  if (!client) {
+    client = new TranscriptClient({
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      // optional: timeout, proxy, etc
+    });
+    await client.ready;
+  }
+
+  try {
+    const result = await client.getTranscript(videoId);
+    if (!result || !result.transcript || result.transcript.length === 0) {
+      console.warn('No transcript found for:', videoId);
+      return '';
     }
+    return result.transcript.map(s => s.text).join(' ');
+  } catch (err: any) {
+    console.error(`Transcript fetch failed for ${videoId}:`, err);
+    return '';
+  }
 }

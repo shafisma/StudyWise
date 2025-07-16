@@ -19,7 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { extractTextFromFile } from '@/lib/file-parser';
 
-type InputMode = 'text' | 'topic' | 'youtube' | 'file';
+type InputMode = 'text' | 'topic' | 'youtube';
 
 interface GeneratedContent {
     flashcards: GenerateFlashcardsOutput['flashcards'];
@@ -46,7 +46,6 @@ export default function FlashcardsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleGenerate = async () => {
-    let input: GenerateFlashcardsInput = {};
     
     setIsLoading(true);
     setGeneratedContent(null);
@@ -69,6 +68,7 @@ export default function FlashcardsPage() {
                 sourceTopic: topic,
             };
         } else {
+            let input: GenerateFlashcardsInput = {};
              if (inputMode === 'text') {
                 if (!text.trim()) {
                   toast({ variant: 'destructive', title: 'Text is required.' });

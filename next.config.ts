@@ -1,7 +1,6 @@
-import type {NextConfig} from 'next';
+require('dotenv').config({ path: './.env' });
 
-const nextConfig: NextConfig = {
-  /* config options here */
+const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -16,8 +15,12 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+      }
     ],
   },
 };
 
-export default nextConfig;
+module.exports = nextConfig;

@@ -19,7 +19,7 @@ import Image from 'next/image';
 
 import { generateNotes, type GenerateNotesInput } from '@/ai/flows/generate-notes';
 import { generateFromTopic } from '@/ai/flows/generate-from-topic';
-import { generateImage } from '@/ai/flows/generate-image';
+import { searchUnsplashImage } from '@/services/unsplash';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -67,27 +67,29 @@ export default function NotesPage() {
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
 
   useEffect(() => {
-    // This effect runs when generatedContent is updated.
-    // If it was generated from a topic and has an imageHint, generate an image.
     if (inputMode === 'from-topic' && generatedContent?.imageHint) {
       const fetchImage = async () => {
         setIsGeneratingImage(true);
         try {
-          const result = await generateImage({ prompt: generatedContent.imageHint! });
-          setImageUrl(result.imageDataUri);
+          const resultUrl = await searchUnsplashImage(generatedContent.imageHint!);
+          setImageUrl(resultUrl);
         } catch (error) {
-          console.error("Image generation failed:", error);
-          // Don't show a toast, failing gracefully is fine.
+          console.error("Image fetch failed:", error);
+           toast({
+              variant: 'destructive',
+              title: 'Image Fetch Failed',
+              description: 'Could not load a cover image from Unsplash. Please check your API key.',
+           });
         } finally {
           setIsGeneratingImage(false);
         }
       };
       fetchImage();
     }
-  }, [generatedContent, inputMode]);
+  }, [generatedContent, inputMode, toast]);
 
   const handlePlayAudio = async (textToPlay: string, id: string) => {
-    if (isSynthesizing) return; // Prevent multiple requests
+    if (isSynthesizing) return; 
 
     setIsSynthesizing(id);
     setAudioSrc(null);

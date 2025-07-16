@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -52,7 +53,10 @@ const generateNotesFlow = ai.defineFlow(
             content = await getYouTubeTranscript(input.youtubeUrl);
         } catch (e) {
             console.error("Failed to get YouTube transcript", e);
-            throw new Error("Could not get transcript for the provided YouTube URL. The video might not have subtitles enabled.");
+            if (e instanceof Error) {
+                throw new Error(e.message);
+            }
+            throw new Error("An unknown error occurred while fetching the YouTube transcript.");
         }
     }
 

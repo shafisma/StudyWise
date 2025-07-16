@@ -24,5 +24,6 @@ export const EvaluateExamOutputSchema = z.object({
   totalScore: z.number().int().describe("The total score the user achieved, calculated programmatically."),
   overallFeedback: z.string().describe("A brief summary of the user's performance."),
   feedbackPerQuestion: z.array(QuestionFeedbackSchema).describe("An array of feedback objects, one for each question, in order."),
+  grade: z.string().optional().describe("The letter grade for the exam (e.g., A+, B, F)."),
 });
 export type EvaluateExamOutput = z.infer<typeof EvaluateExamOutputSchema>;

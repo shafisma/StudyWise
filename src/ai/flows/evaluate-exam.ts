@@ -17,6 +17,17 @@ export async function evaluateExam(input: EvaluateExamInput): Promise<EvaluateEx
   return evaluateExamFlow(input);
 }
 
+const getGrade = (score: number, totalMarks: number): string => {
+    if (totalMarks === 0) return 'N/A';
+    const percentage = (score / totalMarks) * 100;
+    if (percentage >= 90) return 'A+';
+    if (percentage >= 80) return 'A';
+    if (percentage >= 70) return 'B';
+    if (percentage >= 60) return 'C';
+    if (percentage >= 50) return 'D';
+    return 'F';
+}
+
 const prompt = ai.definePrompt({
   name: 'evaluateExamPrompt',
   input: { schema: EvaluateExamInputSchema },
@@ -46,7 +57,7 @@ const prompt = ai.definePrompt({
       - For 'incorrect' answers, 'marksAwarded' should be 0.
       - Provide a brief, clear explanation of why the answer is correct, incorrect, or partially correct.
       - Include the original user answer for that question in the 'userAnswer' field.
-  3.  **Do NOT Calculate Total Score:** You do not need to calculate the final score. Just provide the feedback for each question. The total score will be calculated programmatically based on your per-question evaluation.
+  3.  **Do NOT Calculate Total Score or Grade:** You do not need to calculate the final score or grade. Just provide the feedback for each question. The total score will be calculated programmatically based on your per-question evaluation.
 
   Please provide the output in a single JSON object.
   `,
@@ -65,6 +76,8 @@ const evaluateExamFlow = ai.defineFlow(
     }
 
     let calculatedScore = 0;
+    const totalMarks = input.examQuestions.reduce((acc, q) => acc + q.marks, 0);
+
     const feedbackWithAnswers = output.feedbackPerQuestion.map((feedback, index) => {
       const question = input.examQuestions[index];
       let awarded = 0;
@@ -81,11 +94,14 @@ const evaluateExamFlow = ai.defineFlow(
         marksAwarded: awarded, // Store the final calculated marks
       };
     });
+    
+    const grade = getGrade(calculatedScore, totalMarks);
 
     return { 
         ...output, 
         totalScore: calculatedScore,
-        feedbackPerQuestion: feedbackWithAnswers 
+        feedbackPerQuestion: feedbackWithAnswers,
+        grade,
     };
   }
 );

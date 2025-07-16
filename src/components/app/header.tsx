@@ -15,6 +15,7 @@ import {
   X,
   ClipboardCheck,
   Share2,
+  Award
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -36,6 +37,7 @@ const navItems = [
   { href: '/exam', icon: ClipboardCheck, label: 'Exam' },
   { href: '/concept-map', icon: Share2, label: 'Concept Map'},
   { href: '/progress', icon: TrendingUp, label: 'Progress' },
+  { href: '/achievements', icon: Award, label: 'Achievements'},
 ];
 
 export default function AppHeader() {

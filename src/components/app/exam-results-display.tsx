@@ -1,13 +1,14 @@
 'use client';
 
 import { type FC } from 'react';
-import { Award, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Award, CheckCircle, XCircle, AlertCircle, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Progress } from '@/components/ui/progress';
 import { type EvaluateExamOutput } from '@/ai/schemas/evaluation-schemas';
 import { type ExamQuestion } from '@/ai/schemas/exam-schemas';
 import { cn } from '@/lib/utils';
+import { Badge } from '../ui/badge';
 
 interface ExamResultsDisplayProps {
   results: EvaluateExamOutput;
@@ -40,9 +41,17 @@ const ExamResultsDisplay: FC<ExamResultsDisplayProps> = ({ results, questions })
             <CardDescription>{results.overallFeedback}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="text-center">
-            <p className="text-4xl font-bold">{results.totalScore} / {totalMarks}</p>
-            <p className="text-sm text-muted-foreground">Total Score</p>
+          <div className="flex justify-around items-center text-center">
+            <div>
+              <p className="text-4xl font-bold">{results.totalScore} / {totalMarks}</p>
+              <p className="text-sm text-muted-foreground">Total Score</p>
+            </div>
+            {results.grade && (
+              <div>
+                <p className="text-4xl font-bold">{results.grade}</p>
+                <p className="text-sm text-muted-foreground">Grade</p>
+              </div>
+            )}
           </div>
           <Progress value={percentage} className="w-full" />
         </CardContent>
@@ -75,7 +84,7 @@ const ExamResultsDisplay: FC<ExamResultsDisplayProps> = ({ results, questions })
                             {getStatusIcon(feedback.isCorrect)}
                             <span className="flex-1">Question {index + 1}: {question.question_text}</span>
                         </div>
-                        <span className="text-sm font-medium text-primary ml-4 shrink-0">({marksAwardedText} Marks)</span>
+                         <Badge variant="outline" className="ml-4 shrink-0">{marksAwardedText} Marks</Badge>
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="p-4 space-y-2">
@@ -87,7 +96,7 @@ const ExamResultsDisplay: FC<ExamResultsDisplayProps> = ({ results, questions })
                       <strong className="font-semibold">Correct Answer: </strong>
                       {question.correct_answer}
                     </p>
-                    <div className="p-3 bg-accent rounded-md mt-2">
+                    <div className="p-3 bg-accent/50 rounded-md mt-2 border border-accent">
                       <p className="font-semibold text-accent-foreground">AI Feedback:</p>
                       <p className="text-muted-foreground">{feedback.feedback}</p>
                     </div>

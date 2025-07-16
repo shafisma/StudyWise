@@ -2,10 +2,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { History, Trash2, Flame, Star, TrendingUp, ClipboardCheck, FileQuestion } from 'lucide-react';
+import { History, Trash2, Flame, Star, TrendingUp, ClipboardCheck, FileQuestion, Award } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,6 +19,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 
 interface ActivityResult {
   type: 'quiz' | 'exam';
@@ -25,22 +27,23 @@ interface ActivityResult {
   score: number;
   total: number;
   date: string;
+  grade?: string;
 }
 
 interface GamificationStats {
     xp: number;
     streak: number;
     longestStreak: number;
+    achievements: string[];
 }
 
 export default function ProgressPage() {
   const [activityHistory, setActivityHistory] = useState<ActivityResult[]>([]);
-  const [stats, setStats] = useState<GamificationStats>({ xp: 0, streak: 0, longestStreak: 0 });
+  const [stats, setStats] = useState<GamificationStats>({ xp: 0, streak: 0, longestStreak: 0, achievements: [] });
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
-    // Move localStorage access inside useEffect to ensure it runs only on the client
     try {
         const storedHistory = localStorage.getItem('activityHistory');
         if (storedHistory) {
@@ -59,10 +62,10 @@ export default function ProgressPage() {
     localStorage.removeItem('activityHistory');
     localStorage.removeItem('gamificationStats');
     setActivityHistory([]);
-    setStats({ xp: 0, streak: 0, longestStreak: 0 });
+    setStats({ xp: 0, streak: 0, longestStreak: 0, achievements: [] });
   };
   
-  const StatCard = ({ icon, label, value, unit }: { icon: React.ElementType, label: string, value: number, unit?: string }) => {
+  const StatCard = ({ icon, label, value, unit }: { icon: React.ElementType, label: string, value: number | string, unit?: string }) => {
     const Icon = icon;
     return (
         <Card>
@@ -121,8 +124,9 @@ export default function ProgressPage() {
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xl font-bold">
-                    {result.score}/{result.total}
+                  <p className="text-xl font-bold flex items-center gap-2">
+                    {result.grade && <Badge variant="secondary">{result.grade}</Badge>}
+                    <span>{result.score}/{result.total}</span>
                   </p>
                   <p className="text-sm text-muted-foreground">
                     {result.type === 'quiz' ? 'Score' : 'Marks'}
@@ -148,10 +152,24 @@ export default function ProgressPage() {
             </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3 mb-6">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
             <StatCard icon={Star} label="Total XP" value={stats.xp} unit="XP" />
             <StatCard icon={Flame} label="Current Streak" value={stats.streak} unit="days" />
             <StatCard icon={TrendingUp} label="Longest Streak" value={stats.longestStreak} unit="days" />
+            <Card className="lg:col-span-1">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Achievements</CardTitle>
+                  <Award className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold">
+                    {stats.achievements ? stats.achievements.length : 0}
+                </p>
+                <Link href="/achievements" className="text-xs text-muted-foreground hover:underline">
+                    View all achievements
+                </Link>
+              </CardContent>
+            </Card>
         </div>
 
         <Card>

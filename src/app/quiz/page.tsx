@@ -20,7 +20,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { extractTextFromFile } from '@/lib/file-parser';
 import AudioPlayer from '@/components/app/audio-player';
-import { differenceInCalendarDays } from 'date-fns';
+import { differenceInCalendarDays, isSameWeek } from 'date-fns';
+import { achievements } from '@/lib/achievements';
 
 type InputMode = 'from-text' | 'from-topic' | 'from-youtube';
 
@@ -186,10 +187,75 @@ export default function QuizPage() {
         },
     });
 
-    const fileName = `studywise-quiz-${generatedContent.sourceTopic?.replace(/\\s+/g, '_') || 'custom'}.pdf`;
+    const fileName = `studywise-quiz-${generatedContent.sourceTopic?.replace(/\s+/g, '_') || 'custom'}.pdf`;
     doc.save(fileName);
   };
   
+  const checkAndAwardAchievements = (newActivityHistory: any[], currentStats: any) => {
+    const newAchievements = new Set(currentStats.achievements || []);
+    
+    const showAchievementToast = (id: string) => {
+        if (!newAchievements.has(id)) {
+            const achievement = achievements.find(a => a.id === id);
+            if (achievement) {
+                newAchievements.add(id);
+                toast({ title: `Achievement Unlocked: ${achievement.name}!`, description: achievement.description, className: 'bg-accent text-accent-foreground' });
+            }
+        }
+    };
+    
+    const examHistory = newActivityHistory.filter((item: any) => item.type === 'exam');
+    const quizHistory = newActivityHistory.filter((item: any) => item.type === 'quiz');
+
+    // Exam Achievements
+    if (examHistory.length >= 1) showAchievementToast('exam_novice');
+    if (examHistory.length >= 5) showAchievementToast('exam_pro');
+    if (examHistory.length >= 15) showAchievementToast('exam_veteran');
+
+    const lastExam = examHistory[examHistory.length - 1];
+    if (lastExam) {
+        const percentage = lastExam.total > 0 ? (lastExam.score / lastExam.total) * 100 : 0;
+        if (percentage >= 90) showAchievementToast('top_scorer');
+        if (percentage === 100) showAchievementToast('exam_ace');
+        
+        const sameSubjectExams = examHistory.filter((e: any) => e.topic.toLowerCase() === lastExam.topic.toLowerCase());
+        if (sameSubjectExams.length >= 3) showAchievementToast('subject_specialist');
+    }
+
+    // Quiz Achievements
+    if (quizHistory.length >= 1) showAchievementToast('quiz_taker');
+    if (quizHistory.length >= 10) showAchievementToast('quiz_master');
+    if (quizHistory.length >= 25) showAchievementToast('quiz_champion');
+    
+    const lastQuiz = quizHistory[quizHistory.length - 1];
+    if(lastQuiz && lastQuiz.score === lastQuiz.total) {
+        showAchievementToast('perfect_quiz');
+    }
+    
+
+    // Consistency Achievements
+    if (currentStats.streak >= 3) showAchievementToast('scholars_streak_3');
+    if (currentStats.streak >= 7) showAchievementToast('dedicated_learner_7');
+
+    if (examHistory.length >= 3) {
+      const lastThreeExams = examHistory.slice(-3);
+      if (lastThreeExams.every((e: any) => ['A+', 'A'].includes(e.grade))) {
+        showAchievementToast('consistent_performer');
+      }
+    }
+    
+    const today = new Date();
+    const examsThisWeek = examHistory.filter((h: any) => isSameWeek(new Date(h.date), today, { weekStartsOn: 1 }));
+    if (examsThisWeek.length >= 3) showAchievementToast('weekly_warrior');
+    
+    const quizzesThisWeek = quizHistory.filter((h: any) => isSameWeek(new Date(h.date), today, { weekStartsOn: 1 }));
+    if (quizzesThisWeek.length >= 5) showAchievementToast('quiz_whiz');
+
+
+    return Array.from(newAchievements);
+};
+
+
   const saveQuizResult = (score: number, totalQuestions: number) => {
     let resultTopic = 'Custom Content';
     if(inputMode === 'from-topic') resultTopic = topic;
@@ -206,26 +272,22 @@ export default function QuizPage() {
     history.push(result);
     localStorage.setItem('activityHistory', JSON.stringify(history));
 
-    // Update gamification stats
-    const stats = JSON.parse(localStorage.getItem('gamificationStats') || '{"xp":0, "streak":0, "longestStreak":0, "lastActivityDate": null}');
+    let stats = JSON.parse(localStorage.getItem('gamificationStats') || '{"xp":0, "streak":0, "longestStreak":0, "lastActivityDate": null, "achievements": []}');
     
-    // Add XP
     stats.xp += score * 10;
 
-    // Update streak
     const today = new Date();
     const lastActivityDate = stats.lastActivityDate ? new Date(stats.lastActivityDate) : null;
     
     if (lastActivityDate) {
         const diffDays = differenceInCalendarDays(today, lastActivityDate);
         if (diffDays === 1) {
-            stats.streak++; // Continue streak
+            stats.streak++;
         } else if (diffDays > 1) {
-            stats.streak = 1; // Reset streak
+            stats.streak = 1;
         }
-        // If diffDays is 0, do nothing, it's the same day.
     } else {
-        stats.streak = 1; // First activity
+        stats.streak = 1;
     }
 
     if (stats.streak > stats.longestStreak) {
@@ -234,11 +296,13 @@ export default function QuizPage() {
 
     stats.lastActivityDate = today.toISOString();
     
+    stats.achievements = checkAndAwardAchievements(history, stats);
+
     localStorage.setItem('gamificationStats', JSON.stringify(stats));
 
     toast({
-        title: `+${score * 10} XP`,
-        description: "Your progress has been saved!",
+        title: `+${score * 10} XP Earned!`,
+        description: "Your progress has been saved.",
     });
   }
 
