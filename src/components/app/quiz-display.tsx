@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, type FC } from 'react';
-import { Check, X, ChevronsRight, Award, History, ArrowLeft, Volume2, Loader2 } from 'lucide-react';
+import { Check, X, ChevronsRight, Award, History, ArrowLeft, Volume2, Loader2, Download } from 'lucide-react';
+import jsPDF from 'jspdf';
+import { useToast } from '@/hooks/use-toast';
 import {
   Carousel,
   CarouselApi,
@@ -39,6 +41,47 @@ const QuizDisplay: FC<QuizDisplayProps> = ({ questions, onQuizSubmit, onPlayAudi
   const [score, setScore] = useState(0);
   const [api, setApi] = React.useState<CarouselApi>();
   const [current, setCurrent] = React.useState(0);
+  const { toast } = useToast();
+
+  const handleExportPdf = () => {
+    try {
+      const doc = new jsPDF();
+      let yPos = 20;
+
+      doc.setFontSize(20);
+      doc.text('Quiz Questions', 14, yPos);
+      yPos += 10;
+      doc.setFontSize(12);
+
+      questions.forEach((q, index) => {
+        if (yPos > 250) {
+          doc.addPage();
+          yPos = 20;
+        }
+        
+        doc.setFont('helvetica', 'bold');
+        const splitQuestion = doc.splitTextToSize(`Q${index + 1}: ${q.question}`, 180);
+        doc.text(splitQuestion, 14, yPos);
+        yPos += (splitQuestion.length * 7) + 5;
+        
+        doc.setFont('helvetica', 'normal');
+        q.options.forEach((opt, optIndex) => {
+           const label = String.fromCharCode(65 + optIndex);
+           const isAnswer = opt === q.answer;
+           const text = `${label}) ${opt}${isSubmitted && isAnswer ? ' (Correct)' : ''}`;
+           const splitOpt = doc.splitTextToSize(text, 170);
+           doc.text(splitOpt, 20, yPos);
+           yPos += (splitOpt.length * 7);
+        });
+        yPos += 5;
+      });
+
+      doc.save('studywise-quiz.pdf');
+      toast({ title: "Quiz Exported", description: "PDF has been downloaded" });
+    } catch (e) {
+      toast({ variant: 'destructive', title: "Export Failed" });
+    }
+  };
 
   React.useEffect(() => {
     if (!api) return;
@@ -88,10 +131,15 @@ const QuizDisplay: FC<QuizDisplayProps> = ({ questions, onQuizSubmit, onPlayAudi
     );
   }
 
-  if (isSubmitted) {
+  if (isSubmitted && !isReviewing) {
     return (
       <div className="space-y-6">
-        <Card className="text-center bg-primary/20">
+        <Card className="text-center bg-primary/20 relative">
+            <div className="absolute top-4 right-4">
+                <Button variant="ghost" size="icon" onClick={handleExportPdf} title="Export Quiz">
+                    <Download className="h-5 w-5" />
+                </Button>
+            </div>
             <CardHeader>
                 <div className="mx-auto bg-accent rounded-full p-3 w-fit">
                     <Award className="h-8 w-8 text-accent-foreground"/>
@@ -103,10 +151,12 @@ const QuizDisplay: FC<QuizDisplayProps> = ({ questions, onQuizSubmit, onPlayAudi
                  <Progress value={(score / questions.length) * 100} className="w-full" />
             </CardContent>
         </Card>
-        <Button onClick={handleReview} variant="outline" className="w-full">
-            <History className="mr-2 h-4 w-4" />
-            Review Answers
-        </Button>
+        <div className="flex gap-4">
+            <Button onClick={handleReview} variant="outline" className="w-full">
+                <History className="mr-2 h-4 w-4" />
+                Review Answers
+            </Button>
+        </div>
       </div>
     );
   }
@@ -115,7 +165,13 @@ const QuizDisplay: FC<QuizDisplayProps> = ({ questions, onQuizSubmit, onPlayAudi
     <div className="space-y-4">
         <div className="flex justify-between items-center px-1">
             <p className="text-sm text-muted-foreground">Question {current + 1} of {questions.length}</p>
-            <Progress value={((current + 1) / questions.length) * 100} className="w-1/2" />
+            <div className="flex items-center gap-2">
+                 <Button variant="ghost" size="sm" onClick={handleExportPdf}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Save PDF
+                 </Button>
+                 <Progress value={((current + 1) / questions.length) * 100} className="w-24" />
+            </div>
         </div>
       <Carousel setApi={setApi} className="w-full max-w-md mx-auto">
         <CarouselContent>

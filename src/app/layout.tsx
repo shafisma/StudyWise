@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import AppShell from '@/components/app/app-shell';
@@ -24,9 +24,43 @@ const fontMono = Roboto_Mono({
   variable: '--font-mono',
 });
 
+export const viewport: Viewport = {
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: 'white' },
+    { media: '(prefers-color-scheme: dark)', color: 'black' },
+  ],
+  width: 'device-width',
+  initialScale: 1,
+};
+
 export const metadata: Metadata = {
-  title: 'StudyWise AI',
-  description: 'AI-powered study assistant',
+  title: {
+    default: 'StudyWise AI - Your Personal AI Study Assistant',
+    template: '%s | StudyWise AI',
+  },
+  description: 'Transform your study routine with AI. Generate notes, flashcards, quizzes, and concept maps from any text or topic instantly.',
+  keywords: ['AI study assistant', 'generate notes', 'flashcards maker', 'quiz generator', 'study tools', 'education AI', 'concept maps'],
+  authors: [{ name: 'StudyWise Team' }],
+  creator: 'StudyWise AI',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://studywise.vercel.app'),
+  openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    url: '/',
+    title: 'StudyWise AI - Your Personal AI Study Assistant',
+    description: 'Transform your study routine with AI. Generate notes, flashcards, quizzes, and concept maps from any text or topic instantly.',
+    siteName: 'StudyWise AI',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'StudyWise AI - Your Personal AI Study Assistant',
+    description: 'AI-powered study tools: Notes, Flashcards, Quizzes, and more.',
+    creator: '@studywiseai',
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({
