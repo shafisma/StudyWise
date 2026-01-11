@@ -27,7 +27,7 @@ import {
   SheetDescription,
 } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
-import { UserButton } from "@clerk/nextjs";
+import { UserButton, SignedIn, SignedOut, SignInButton } from "@clerk/nextjs";
 
 const navItems = [
   { href: '/notes', icon: FileText, label: 'Notes' },
@@ -44,9 +44,10 @@ export default function AppHeader() {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  if (pathname === '/') {
-    return null; // Don't show header on landing page
-  }
+  // Removed check for landing page to show header everywhere
+  // if (pathname === '/') {
+  //   return null; 
+  // }
 
   const navLinks = (
     <>
@@ -83,7 +84,17 @@ export default function AppHeader() {
         </div>
 
         <div className="flex flex-1 items-center justify-end gap-4">
-            <UserButton afterSignOutUrl="/"/>
+            <SignedIn>
+                <UserButton afterSignOutUrl="/"/>
+            </SignedIn>
+            <SignedOut>
+                <SignInButton mode="modal">
+                    <Button variant="default" size="sm">
+                        Sign In
+                    </Button>
+                </SignInButton>
+            </SignedOut>
+
             <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
               <SheetTrigger asChild>
                 <Button
@@ -94,16 +105,18 @@ export default function AppHeader() {
                   <span className="sr-only">Toggle Menu</span>
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="pr-0">
+              <SheetContent side="right" className="w-[80vw] sm:w-[350px]">
                  <SheetHeader>
-                    <SheetTitle className="sr-only">Menu</SheetTitle>
-                    <SheetDescription className="sr-only">Main navigation menu</SheetDescription>
+                    <SheetTitle className="text-left">Menu</SheetTitle>
+                    <SheetDescription className="text-left">
+                        Navigate to different sections of StudyWise
+                    </SheetDescription>
                   </SheetHeader>
-                 <Link href="/" className="flex items-center gap-2 mb-4" onClick={() => setIsMobileMenuOpen(false)}>
+                 <Link href="/" className="flex items-center gap-2 my-4" onClick={() => setIsMobileMenuOpen(false)}>
                     <BrainCircuit className="h-6 w-6 text-primary" />
                     <span className="font-bold">StudyWise</span>
                 </Link>
-                <div className="flex flex-col space-y-2">
+                <div className="flex flex-col space-y-3">
                     {navLinks}
                 </div>
               </SheetContent>

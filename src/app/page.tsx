@@ -102,7 +102,7 @@ export default function LandingPage() {
 
       <footer className="bg-muted p-6 md:py-8 w-full">
         <div className="container mx-auto px-4 md:px-6 flex items-center justify-center">
-            <p className="text-sm text-muted-foreground">&copy; 2024 StudyWise AI. All rights reserved.</p>
+            <p className="text-sm text-muted-foreground">&copy; 2026 StudyWise AI. All rights reserved.</p>
         </div>
       </footer>
     </div>
