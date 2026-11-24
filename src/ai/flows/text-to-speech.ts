@@ -8,10 +8,9 @@
  * - TextToSpeechOutput - The return type for the function.
  */
 
-import {ai} from '@/ai/genkit';
+import {ai, googleAI} from '@/ai/genkit';
 import {z} from 'genkit';
 import wav from 'wav';
-import { googleAI } from '@genkit-ai/googleai';
 
 const TextToSpeechInputSchema = z.object({
   text: z.string().describe('The text to convert to speech.'),
